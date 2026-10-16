@@ -1,9 +1,11 @@
-// Core tests that need no external files: mapper paging and a tiny ROM drawing a tile.
+// Core tests that need no external files: mapper paging, tiny ROMs drawing tiles and a
+// sprite, and splitting the picture into the planes of the pseudo-3D view.
 #include <cstdio>
 #include <cstdlib>
 #include <vector>
 
 #include "core/gamegear.h"
+#include "render/planes.h"
 
 using namespace plumgg;
 
@@ -75,6 +77,56 @@ void testTileRendering() {
     check(f.info[topLeft].layer == PixelLayer::Background && f.info[topLeft].source == 1, "pixel tagged as tile 1");
 }
 
+// A sprite over a normal tile and a priority tile: the VDP keeps both planes apart and
+// splitPlanes() sorts the pixels into the pseudo-3D planes.
+void testPlanes() {
+    Asm a;
+    a.bytes({0xF3});              // di
+    a.vdpReg(2, 0xFF);            // name table at 0x3800
+    a.vdpReg(5, 0xFF);            // sprite table at 0x3F00
+    a.vdpReg(6, 0x00);            // sprite patterns from tile 0
+    a.vdpAddr(0x0000, 3);         // CRAM: colour 0 black, colour 1 red
+    for (uint8_t v : {0x00, 0x00, 0x0F, 0x00}) a.outPort(0xBE, v);
+    a.vdpAddr(0x0022, 3);         // sprite colour 1 (CRAM 17) green
+    for (uint8_t v : {0xF0, 0x00}) a.outPort(0xBE, v);
+    a.vdpAddr(0x0020, 1);         // tile 1: every pixel colour 1
+    for (int row = 0; row < 8; ++row)
+        for (uint8_t v : {0xFF, 0x00, 0x00, 0x00}) a.outPort(0xBE, v);
+    a.vdpAddr(0x3800 + 3 * 64 + 6 * 2, 1);  // LCD top-left: tile 1, then tile 1 with priority
+    for (uint8_t v : {0x01, 0x00, 0x01, 0x10}) a.outPort(0xBE, v);
+    a.vdpAddr(0x3F00, 1);         // sprite 0 on the LCD's first line, then the end marker
+    for (uint8_t v : {23, 0xD0}) a.outPort(0xBE, v);
+    a.vdpAddr(0x3F80, 1);         // x = 4 pixels into the LCD, tile 1
+    for (uint8_t v : {VideoFrame::kVisibleX + 4, 1}) a.outPort(0xBE, v);
+    a.vdpReg(1, 0x40);            // display on
+    a.bytes({0x18, 0xFE});        // jr $
+
+    GameGear gg;
+    std::vector<uint8_t> rom = a.code;
+    rom.resize(0x8000, 0xFF);
+    gg.cartridge().loadData(rom);
+    gg.reset();
+    gg.runFrame();
+    gg.runFrame();
+
+    const uint32_t red = 0xFFFF0000u, green = 0xFF00FF00u, black = 0xFF000000u;
+    const VideoFrame& f = gg.frame();
+    const int top = VideoFrame::kVisibleY * VideoFrame::kWidth + VideoFrame::kVisibleX;
+    check(f.info[top + 4].layer == PixelLayer::Sprite && f.rgba[top + 4] == green, "sprite covers a normal tile");
+    check(f.backgroundRgba[top + 4] == red, "background kept under the sprite");
+    check(f.info[top + 9].layer == PixelLayer::BackgroundPriority && f.rgba[top + 9] == red,
+          "priority tile covers the sprite");
+    check(f.spriteRgba[top + 9] == green, "sprite kept under the priority tile");
+    check(f.spriteRgba[top + 20] == 0, "no sprite outside it");
+
+    Planes planes;
+    splitPlanes(f, planes);
+    check(planes[PlaneBackground][4] == red && planes[PlaneSprites][4] == green, "planes: tile and sprite");
+    check(planes[PlanePriority][9] == red && planes[PlaneBackground][9] == 0, "planes: priority tile on its own");
+    check(planes[PlaneSky][20] == black && planes[PlaneBackground][20] == 0, "planes: colour 0 is sky");
+    check(planes[PlaneSky][4] == black, "planes: sky filled in behind solid tiles");
+}
+
 void testVdpInterrupt() {
     // ei; im 1; halt-loop. The frame interrupt handler at 0x38 counts into RAM.
     std::vector<uint8_t> rom(0x8000, 0x00);
@@ -102,6 +154,7 @@ void testVdpInterrupt() {
 int main() {
     testMapper();
     testTileRendering();
+    testPlanes();
     testVdpInterrupt();
     std::printf(failures ? "%d fallos\n" : "todo bien\n", failures);
     return failures ? EXIT_FAILURE : EXIT_SUCCESS;

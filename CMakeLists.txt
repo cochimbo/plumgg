@@ -19,6 +19,7 @@ add_library(plumgg_core STATIC
   src/core/vdp.cpp
   src/core/cartridge.cpp
   src/core/gamegear.cpp
+  src/render/planes.cpp
 )
 target_include_directories(plumgg_core PUBLIC src)
 
@@ -41,7 +42,7 @@ else()
   set(PLUMGG_SDL2_TARGET SDL2::SDL2-static)
 endif()
 
-# Dear ImGui for the menus and option windows, drawn through SDL_Renderer.
+# Dear ImGui for the menus and option windows, drawn with OpenGL 3.
 include(FetchContent)
 FetchContent_Declare(imgui
   GIT_REPOSITORY https://github.com/ocornut/imgui.git
@@ -54,7 +55,7 @@ add_library(plumgg_imgui STATIC
   ${imgui_SOURCE_DIR}/imgui_tables.cpp
   ${imgui_SOURCE_DIR}/imgui_widgets.cpp
   ${imgui_SOURCE_DIR}/backends/imgui_impl_sdl2.cpp
-  ${imgui_SOURCE_DIR}/backends/imgui_impl_sdlrenderer2.cpp
+  ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp
 )
 target_include_directories(plumgg_imgui PUBLIC ${imgui_SOURCE_DIR} ${imgui_SOURCE_DIR}/backends)
 target_link_libraries(plumgg_imgui PUBLIC ${PLUMGG_SDL2_TARGET})
@@ -65,7 +66,8 @@ add_executable(plumgg WIN32
   src/frontend/settings.cpp
   src/frontend/file_dialog.cpp
   src/frontend/ui.cpp
-  src/render/sdl_renderers.cpp
+  src/render/gl.cpp
+  src/render/gl_renderers.cpp
 )
 target_link_libraries(plumgg PRIVATE plumgg_core plumgg_imgui)
 if(TARGET SDL2::SDL2main)

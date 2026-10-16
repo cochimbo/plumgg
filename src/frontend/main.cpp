@@ -1,12 +1,13 @@
 #include <SDL.h>
 
+#include <algorithm>
 #include <cstdio>
 #include <memory>
 #include <string>
 #include <vector>
 
 #include "../core/gamegear.h"
-#include "../render/sdl_renderers.h"
+#include "../render/gl_renderers.h"
 #include "input.h"
 #include "settings.h"
 #include "ui.h"
@@ -85,24 +86,37 @@ int main(int argc, char** argv) {
     auto input = std::make_unique<Input>(InputConfig::loadOrCreate(iniPath));
     Settings settings = Settings::load(iniPath);
 
+    // OpenGL 3.3 core everywhere; macOS only hands out core contexts marked forward compatible.
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG);
+    SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+    SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
     SDL_Window* window = SDL_CreateWindow("plumgg", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
                                           VideoFrame::kVisibleWidth * settings.windowScale,
-                                          VideoFrame::kVisibleHeight * settings.windowScale, SDL_WINDOW_RESIZABLE);
+                                          VideoFrame::kVisibleHeight * settings.windowScale,
+                                          SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL);
     if (!window) {
         std::fprintf(stderr, "SDL_CreateWindow: %s\n", SDL_GetError());
         return 1;
     }
     SDL_SetWindowMinimumSize(window, VideoFrame::kVisibleWidth, VideoFrame::kVisibleHeight);
-    SDL_Renderer* sdl = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
-    if (!sdl) sdl = SDL_CreateRenderer(window, -1, SDL_RENDERER_SOFTWARE);
-    if (!sdl) {
-        std::fprintf(stderr, "SDL_CreateRenderer: %s\n", SDL_GetError());
+    SDL_GLContext context = SDL_GL_CreateContext(window);
+    const char* missing = context ? gl::load() : nullptr;
+    if (!context || missing) {
+        const std::string message =
+            "plumgg necesita una tarjeta gráfica con OpenGL 3.3 y sus drivers actualizados.\n\n" +
+            std::string(context ? "Falta la función " + std::string(missing) : SDL_GetError());
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "plumgg", message.c_str(), window);
         return 1;
     }
+    SDL_GL_SetSwapInterval(0);  // the loop below paces itself to the console's refresh rate
 
     std::vector<std::unique_ptr<Renderer>> renderers;
-    renderers.push_back(std::make_unique<FlatRenderer>(sdl));
-    renderers.push_back(std::make_unique<LayerRenderer>(sdl));
+    renderers.push_back(std::make_unique<FlatRenderer>());
+    renderers.push_back(std::make_unique<LayerRenderer>());
+    auto pseudo3d = std::make_unique<Pseudo3DRenderer>();
     UiState uiState;
     for (const auto& r : renderers) uiState.views.push_back(r->name());
     auto viewIndex = [&] {
@@ -112,7 +126,7 @@ int main(int argc, char** argv) {
     };
 
     input->openAll();
-    auto ui = std::make_unique<Ui>(window, sdl, settings, *input);
+    auto ui = std::make_unique<Ui>(window, context, settings, *input);
     auto app = std::make_unique<App>();
 
     auto save = [&] { settings.save(iniPath, input->config()); };
@@ -205,15 +219,17 @@ int main(int argc, char** argv) {
         }
 
         int w, h;
-        SDL_GetRendererOutputSize(sdl, &w, &h);
-        const int top = ui->menuHeight();
-        SDL_Rect game{0, top, w, h - top};
-        SDL_RenderSetViewport(sdl, &game);
-        Renderer& view = *renderers[viewIndex()];
+        SDL_GL_GetDrawableSize(window, &w, &h);
+        gl::Viewport(0, 0, w, h);
+        gl::ClearColor(0, 0, 0, 1);
+        gl::Clear(gl::COLOR_BUFFER_BIT);
+        // The game fills the window below the menu bar; OpenGL counts rows from the bottom.
+        const Viewport game{0, 0, w, std::max(1, h - ui->menuHeight())};
+        Renderer& view = settings.render.pseudo3d ? *pseudo3d : *renderers[viewIndex()];
         view.setOptions(settings.render);
-        view.draw(app->console.frame(), game.w, game.h);
+        view.draw(app->console.frame(), game);
         ui->render();
-        SDL_RenderPresent(sdl);
+        SDL_GL_SwapWindow(window);
 
         // Pace to the console's refresh rate; resync if we fell far behind.
         next += static_cast<Uint64>(kFrameSeconds * freq);
@@ -229,8 +245,9 @@ int main(int argc, char** argv) {
     save();
     ui.reset();
     renderers.clear();
+    pseudo3d.reset();
     input.reset();
-    SDL_DestroyRenderer(sdl);
+    SDL_GL_DeleteContext(context);
     SDL_DestroyWindow(window);
     SDL_Quit();
     return 0;

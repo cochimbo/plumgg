@@ -4,7 +4,7 @@
 
 #include "imgui.h"
 #include "imgui_impl_sdl2.h"
-#include "imgui_impl_sdlrenderer2.h"
+#include "imgui_impl_opengl3.h"
 
 namespace plumgg {
 
@@ -30,8 +30,8 @@ std::string fileName(const std::string& path) {
 
 }  // namespace
 
-Ui::Ui(SDL_Window* window, SDL_Renderer* renderer, Settings& settings, Input& input)
-    : window_(window), renderer_(renderer), settings_(settings), input_(input) {
+Ui::Ui(SDL_Window* window, SDL_GLContext context, Settings& settings, Input& input)
+    : window_(window), settings_(settings), input_(input) {
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO();
@@ -46,12 +46,12 @@ Ui::Ui(SDL_Window* window, SDL_Renderer* renderer, Settings& settings, Input& in
         io.Fonts->AddFontFromFileTTF(font, 18.0f);
     }
 #endif
-    ImGui_ImplSDL2_InitForSDLRenderer(window_, renderer_);
-    ImGui_ImplSDLRenderer2_Init(renderer_);
+    ImGui_ImplSDL2_InitForOpenGL(window_, context);
+    ImGui_ImplOpenGL3_Init("#version 330 core");
 }
 
 Ui::~Ui() {
-    ImGui_ImplSDLRenderer2_Shutdown();
+    ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplSDL2_Shutdown();
     ImGui::DestroyContext();
 }
@@ -114,7 +114,7 @@ UiActions Ui::frame(const UiState& state) {
         }
     }
 
-    ImGui_ImplSDLRenderer2_NewFrame();
+    ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplSDL2_NewFrame();
     ImGui::NewFrame();
 
@@ -130,8 +130,7 @@ UiActions Ui::frame(const UiState& state) {
 
 void Ui::render() {
     ImGui::Render();
-    SDL_RenderSetViewport(renderer_, nullptr);
-    ImGui_ImplSDLRenderer2_RenderDrawData(ImGui::GetDrawData(), renderer_);
+    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 }
 
 void Ui::drawMenuBar(const UiState& state, UiActions& out) {
@@ -335,8 +334,28 @@ void Ui::drawVideo(const UiState& state, UiActions& out) {
 
     ImGui::SeparatorText("Pseudo-3D");
     changed |= ImGui::Checkbox("Efecto 3D", &settings_.render.pseudo3d);
-    ImGui::TextDisabled("Todavía no hay vista pseudo-3D; el interruptor y su atajo\n"
-                        "ya quedan guardados para cuando llegue.");
+    ImGui::SameLine();
+    ImGui::TextDisabled("(atajo en Opciones > Controles)");
+    RenderOptions& r = settings_.render;
+    ImGui::BeginDisabled(!r.pseudo3d);
+    // Sliders save once released rather than on every frame of the drag.
+    float depth = r.depth * 100.0f, thickness = r.thickness * 100.0f;
+    if (ImGui::SliderFloat("Profundidad", &depth, 0.0f, 100.0f, "%.0f %%")) r.depth = depth / 100.0f;
+    changed |= ImGui::IsItemDeactivatedAfterEdit();
+    ImGui::SliderFloat("Inclinación", &r.tilt, 0.0f, 45.0f, "%.0f°");
+    changed |= ImGui::IsItemDeactivatedAfterEdit();
+    if (ImGui::SliderFloat("Grosor", &thickness, 0.0f, 100.0f, "%.0f %%")) r.thickness = thickness / 100.0f;
+    changed |= ImGui::IsItemDeactivatedAfterEdit();
+    changed |= ImGui::Checkbox("Sombra de los sprites", &r.shadows);
+    if (ImGui::Button("Valores por defecto")) {
+        const RenderOptions defaults;
+        r.depth = defaults.depth;
+        r.tilt = defaults.tilt;
+        r.thickness = defaults.thickness;
+        r.shadows = defaults.shadows;
+        changed = true;
+    }
+    ImGui::EndDisabled();
 
     out.settingsChanged |= changed;
     ImGui::End();
@@ -357,7 +376,7 @@ void Ui::drawAbout() {
     ImGui::BulletText("P  pausa");
     ImGui::BulletText("F11  pantalla completa");
     ImGui::BulletText("Esc  mostrar u ocultar la barra de menús");
-    ImGui::BulletText("Efecto 3D: configurable en Opciones > Controles");
+    ImGui::BulletText("F3  efecto 3D (se puede cambiar en Opciones > Controles)");
     ImGui::End();
 }
 
