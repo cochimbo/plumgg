@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(plumgg LANGUAGES CXX)
+project(plumgg LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -22,6 +22,18 @@ add_library(plumgg_core STATIC
   src/core/gamegear.cpp
 )
 target_include_directories(plumgg_core PUBLIC src)
+
+# miniz (vendored, MIT) to read ROMs packed in .zip files.
+add_library(plumgg_miniz STATIC third_party/miniz/miniz.c)
+set_target_properties(plumgg_miniz PROPERTIES LINKER_LANGUAGE C)
+target_include_directories(plumgg_miniz PUBLIC third_party/miniz)
+target_compile_definitions(plumgg_miniz PUBLIC MINIZ_NO_STDIO MINIZ_NO_TIME)
+if(MSVC)
+  target_compile_options(plumgg_miniz PRIVATE /W0)
+else()
+  target_compile_options(plumgg_miniz PRIVATE -w)
+endif()
+target_link_libraries(plumgg_core PRIVATE plumgg_miniz)
 
 # SDL2: use an installed copy (vcpkg, system package, SDL2_DIR) or fetch it.
 find_package(SDL2 CONFIG QUIET)
@@ -87,7 +99,7 @@ endif()
 if(PLUMGG_BUILD_TESTS)
   enable_testing()
   add_executable(core_tests tests/core_tests.cpp)
-  target_link_libraries(core_tests PRIVATE plumgg_core)
+  target_link_libraries(core_tests PRIVATE plumgg_core plumgg_miniz)
   add_test(NAME core_tests COMMAND core_tests)
 
   # Runs the ZEXDOC/ZEXALL Z80 exercisers: zex_runner path/to/zexdoc.com

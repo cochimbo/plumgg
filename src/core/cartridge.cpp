@@ -1,9 +1,60 @@
 #include "cartridge.h"
 
+#include <algorithm>
+#include <cctype>
 #include <fstream>
 #include <iterator>
 
+#include "miniz.h"
+
 namespace plumgg {
+
+namespace {
+
+bool isZip(const std::vector<uint8_t>& data) {
+    return data.size() >= 4 && data[0] == 'P' && data[1] == 'K' && data[2] == 3 && data[3] == 4;
+}
+
+bool hasRomExtension(std::string name) {
+    std::transform(name.begin(), name.end(), name.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    auto endsWith = [&](const char* ext) {
+        const std::string e(ext);
+        return name.size() > e.size() && name.compare(name.size() - e.size(), e.size(), e) == 0;
+    };
+    return endsWith(".gg") || endsWith(".sms") || endsWith(".bin");
+}
+
+// Replaces a zip archive with its first .gg/.sms/.bin entry.
+bool extractRomFromZip(std::vector<uint8_t>& data, const std::string& path, std::string* error) {
+    mz_zip_archive zip{};
+    if (!mz_zip_reader_init_mem(&zip, data.data(), data.size(), 0)) {
+        if (error) *error = "el zip está dañado: " + path;
+        return false;
+    }
+    bool found = false;
+    const mz_uint count = mz_zip_reader_get_num_files(&zip);
+    for (mz_uint i = 0; i < count && !found; ++i) {
+        mz_zip_archive_file_stat st;
+        if (!mz_zip_reader_file_stat(&zip, i, &st) || st.m_is_directory || !hasRomExtension(st.m_filename)) continue;
+        size_t size = 0;
+        void* rom = mz_zip_reader_extract_to_heap(&zip, i, &size, 0);
+        if (!rom) {
+            if (error) *error = std::string("no se puede descomprimir ") + st.m_filename + " de " + path;
+            mz_zip_reader_end(&zip);
+            return false;
+        }
+        const uint8_t* bytes = static_cast<const uint8_t*>(rom);
+        std::vector<uint8_t> extracted(bytes, bytes + size);
+        mz_free(rom);
+        data = std::move(extracted);
+        found = true;
+    }
+    mz_zip_reader_end(&zip);
+    if (!found && error) *error = "el zip no contiene ninguna ROM (.gg, .sms o .bin): " + path;
+    return found;
+}
+
+}  // namespace
 
 bool Cartridge::loadFile(const std::string& path, std::string* error) {
     std::ifstream in(path, std::ios::binary);
@@ -12,6 +63,7 @@ bool Cartridge::loadFile(const std::string& path, std::string* error) {
         return false;
     }
     std::vector<uint8_t> data((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    if (isZip(data) && !extractRomFromZip(data, path, error)) return false;
     // Some dumps carry a 512-byte copier header in front of the ROM.
     if (data.size() % 0x4000 == 512) data.erase(data.begin(), data.begin() + 512);
     if (data.empty()) {
