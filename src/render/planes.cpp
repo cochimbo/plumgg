@@ -1,5 +1,7 @@
 #include "planes.h"
 
+#include <algorithm>
+
 namespace plumgg {
 
 void splitPlanes(const VideoFrame& frame, Planes& planes) {
@@ -40,6 +42,30 @@ void splitPlanes(const VideoFrame& frame, Planes& planes) {
             else sky[x] = fill;
         }
     }
+}
+
+void markEdgeDistance(std::vector<uint32_t>& plane) {
+    constexpr int kW = VideoFrame::kVisibleWidth;
+    constexpr int kH = VideoFrame::kVisibleHeight;
+    // Two-pass chamfer distance: forward from the top left, then back from the bottom right.
+    std::vector<uint8_t> d(plane.size());
+    for (int y = 0; y < kH; ++y)
+        for (int x = 0; x < kW; ++x) {
+            const int i = y * kW + x;
+            if (!(plane[i] >> 24)) continue;
+            const int up = y > 0 ? d[i - kW] : 0;
+            const int left = x > 0 ? d[i - 1] : 0;
+            d[i] = static_cast<uint8_t>(std::min({up, left, kMaxEdgeDistance - 1}) + 1);
+        }
+    for (int y = kH - 1; y >= 0; --y)
+        for (int x = kW - 1; x >= 0; --x) {
+            const int i = y * kW + x;
+            if (!d[i]) continue;
+            const int down = y < kH - 1 ? d[i + kW] : 0;
+            const int right = x < kW - 1 ? d[i + 1] : 0;
+            d[i] = static_cast<uint8_t>(std::min<int>({d[i], down + 1, right + 1}));
+            plane[i] = (plane[i] & 0x00FFFFFFu) | static_cast<uint32_t>(255 - 16 * (kMaxEdgeDistance - d[i])) << 24;
+        }
 }
 
 }  // namespace plumgg

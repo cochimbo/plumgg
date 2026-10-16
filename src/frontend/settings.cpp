@@ -65,6 +65,7 @@ Settings Settings::load(const std::string& path) {
                     if (lower(value) == kScaleNames[i]) s.render.scale = static_cast<ScaleMode>(i);
             } else if (key == "suavizado") s.render.smooth = yes(value);
             else if (key == "efecto_3d") s.render.pseudo3d = yes(value);
+            else if (key == "estilo_3d") s.render.style = lower(value) == "capas" ? Style3D::Layers : Style3D::Voxels;
             else if (key == "profundidad_3d") s.render.depth = std::clamp(std::atoi(value.c_str()), 0, 100) / 100.0f;
             else if (key == "inclinacion_3d") s.render.tilt = static_cast<float>(std::clamp(std::atoi(value.c_str()), 0, 45));
             else if (key == "grosor_3d") s.render.thickness = std::clamp(std::atoi(value.c_str()), 0, 100) / 100.0f;
@@ -94,7 +95,9 @@ bool Settings::save(const std::string& path, const InputConfig& input) const {
         << "escalado = " << kScaleNames[static_cast<int>(render.scale)] << "\n"
         << "suavizado = " << flag(render.smooth) << "\n"
         << "efecto_3d = " << flag(render.pseudo3d) << "\n"
-        << "# profundidad_3d y grosor_3d van de 0 a 100; inclinacion_3d en grados, de 0 a 45.\n"
+        << "# estilo_3d: voxeles o capas. profundidad_3d y grosor_3d van de 0 a 100;\n"
+        << "# inclinacion_3d en grados, de 0 a 45.\n"
+        << "estilo_3d = " << (render.style == Style3D::Layers ? "capas" : "voxeles") << "\n"
         << "profundidad_3d = " << std::lround(render.depth * 100) << "\n"
         << "inclinacion_3d = " << std::lround(render.tilt) << "\n"
         << "grosor_3d = " << std::lround(render.thickness * 100) << "\n"

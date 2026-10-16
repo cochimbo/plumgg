@@ -6,15 +6,19 @@ namespace plumgg {
 
 enum class ScaleMode { Integer, Fit, Stretch };
 
+// How the pseudo-3D view builds each plane: flat cut-outs, or one block per pixel.
+enum class Style3D { Layers, Voxels };
+
 // Display options chosen in the video menu.
 struct RenderOptions {
     ScaleMode scale = ScaleMode::Integer;
     bool smooth = false;     // bilinear filtering instead of sharp pixels
     bool pseudo3d = false;   // toggled by the "efecto 3D" hotkey: draw with the pseudo-3D renderer
     // Pseudo-3D look, each 0..1 except the tilt.
-    float depth = 0.5f;      // how far apart the layers are
-    float tilt = 20.0f;      // camera tilt in degrees; at 0 the picture looks flat
-    float thickness = 0.5f;  // how much of the gap below a layer its sides fill
+    Style3D style = Style3D::Voxels;
+    float depth = 0.6f;      // how far apart the layers are
+    float tilt = 25.0f;      // camera tilt in degrees; at 0 the picture looks flat
+    float thickness = 1.0f;  // how much of the gap below a plane its sides (or blocks) fill
     bool shadows = true;     // sprites cast a shadow on the background
 };
 

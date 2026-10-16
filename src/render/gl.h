@@ -26,6 +26,7 @@ using GLsizeiptr = std::ptrdiff_t;
 
 constexpr GLboolean FALSE_ = 0;
 constexpr GLboolean TRUE_ = 1;
+constexpr GLenum TRIANGLES = 0x0004;
 constexpr GLenum TRIANGLE_STRIP = 0x0005;
 constexpr GLenum DEPTH_BUFFER_BIT = 0x00000100;
 constexpr GLenum COLOR_BUFFER_BIT = 0x00004000;

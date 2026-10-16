@@ -69,12 +69,21 @@ Con `F3` (o Opciones > Efecto 3D) la imagen se separa en cuatro planos, de atrá
 4. **Prioridad**: los tiles que el juego marca para tapar a los sprites (vegetación delante,
    marcadores).
 
-Cada plano puede tener lados hasta el plano de detrás, como si fuera de cartón grueso, y
-los sprites proyectan una sombra sobre el fondo. En Opciones > Vídeo se ajusta:
+Hay dos estilos:
 
+- **Vóxeles** (el de serie): cada píxel del fondo, los sprites y los tiles de prioridad es
+  un bloque iluminado. Las formas se abomban desde el borde hacia dentro, así que los
+  personajes parecen figuritas y las plataformas bloques con los cantos redondeados. El
+  cielo queda plano al fondo.
+- **Capas**: cada plano es un recorte plano, como de cartón grueso, con lados hasta el
+  plano de detrás.
+
+En los dos los sprites proyectan una sombra sobre el fondo. En Opciones > Vídeo se ajusta:
+
+- **Estilo**: vóxeles o capas.
 - **Profundidad**: cuánto se separan los planos.
-- **Inclinación**: cuánto se inclina la cámara (a 0° la imagen se ve plana).
-- **Grosor**: cuánto de ese hueco rellenan los lados de cada plano (0 = planos finos).
+- **Inclinación**: cuánto se inclina la cámara.
+- **Grosor**: cuánto de ese hueco rellenan los lados o los bloques de cada plano.
 - **Sombra de los sprites**.
 
 Hace falta una tarjeta gráfica con **OpenGL 3.3** (cualquier PC de los últimos diez años).
@@ -130,6 +139,12 @@ reales del juego. Para jugar, la vista es "2D".
 `splitPlanes()` (`src/render/planes.cpp`) reparte los píxeles en los cuatro planos y
 `Pseudo3DRenderer` sube cada uno como una textura y lo dibuja a su altura con una cámara en
 perspectiva inclinada. Cada plano se escala para que, con la cámara sin inclinar, ocupe
-exactamente los mismos píxeles que en 2D; al inclinarla aparece la profundidad. Los lados
-de cada plano son copias apiladas y más oscuras de su silueta (con instancing, una sola
-llamada por plano).
+exactamente los mismos píxeles que en 2D; al inclinarla aparece la profundidad.
+
+En el estilo capas, los lados de cada plano son copias apiladas y más oscuras de su
+silueta. En el de vóxeles, `markEdgeDistance()` guarda en el alfa de cada píxel su
+distancia al borde de la forma (hasta 4). El vertex shader dibuja un bloque por píxel (un
+cubo sin cara trasera), con una altura que crece con esa distancia, e ilumina la cara
+frontal según la pendiente para que la forma se vea redondeada. No se dibujan los píxeles
+vacíos ni las caras ocultas. Los dos estilos hacen una sola llamada de dibujo por plano
+(instancing).
