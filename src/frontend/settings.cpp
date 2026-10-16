@@ -67,6 +67,9 @@ Settings Settings::load(const std::string& path) {
             else if (key == "tamano_ventana") s.windowScale = std::clamp(std::atoi(value.c_str()), 1, 8);
             else if (key == "pantalla_completa") s.fullscreen = yes(value);
             else if (key == "barra_menus") s.showMenu = yes(value);
+        } else if (section == "audio") {
+            if (key == "volumen") s.volume = std::clamp(std::atoi(value.c_str()), 0, 100);
+            else if (key == "silencio") s.mute = yes(value);
         } else if (section == "recientes") {
             if (key == "rom" && !value.empty() && s.recent.size() < kMaxRecent) s.recent.push_back(value);
             else if (key == "ultima_carpeta") s.lastFolder = value;
@@ -89,6 +92,10 @@ bool Settings::save(const std::string& path, const InputConfig& input) const {
         << "tamano_ventana = " << windowScale << "\n"
         << "pantalla_completa = " << flag(fullscreen) << "\n"
         << "barra_menus = " << flag(showMenu) << "\n"
+        << "\n[audio]\n"
+        << "# volumen: de 0 a 100.\n"
+        << "volumen = " << volume << "\n"
+        << "silencio = " << flag(mute) << "\n"
         << "\n[recientes]\n";
     if (!lastFolder.empty()) out << "ultima_carpeta = " << lastFolder << "\n";
     for (const auto& r : recent) out << "rom = " << r << "\n";

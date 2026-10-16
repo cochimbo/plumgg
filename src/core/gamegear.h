@@ -5,6 +5,7 @@
 #include <string>
 
 #include "cartridge.h"
+#include "psg.h"
 #include "vdp.h"
 #include "z80.h"
 
@@ -16,7 +17,8 @@ struct Buttons {
 };
 
 // The whole console: Z80, VDP, cartridge, work RAM and I/O ports.
-// It knows nothing about windows or rendering; frontends read frame() and feed input.
+// It knows nothing about windows, rendering or audio devices; frontends read frame()
+// and psg().samples() and feed input.
 class GameGear : private Z80Bus {
 public:
     static constexpr int kCyclesPerLine = 228;  // 3.579545 MHz / (262 lines * 59.92 Hz)
@@ -32,6 +34,7 @@ public:
     Cartridge& cartridge() { return cart_; }
     Z80& cpu() { return cpu_; }
     Vdp& vdp() { return vdp_; }
+    Psg& psg() { return psg_; }
     uint8_t peek(uint16_t addr) { return read(addr); }  // CPU view of memory, for tools and tests
 
 private:
@@ -42,6 +45,7 @@ private:
 
     Z80 cpu_;
     Vdp vdp_;
+    Psg psg_;
     Cartridge cart_;
     std::array<uint8_t, 0x2000> ram_{};
     std::array<uint8_t, 7> ggRegs_{};  // ports 0x00-0x06: start button, link port, stereo

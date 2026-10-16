@@ -7,6 +7,7 @@
 
 #include "../core/gamegear.h"
 #include "../render/sdl_renderers.h"
+#include "audio.h"
 #include "input.h"
 #include "settings.h"
 #include "ui.h"
@@ -114,6 +115,7 @@ int main(int argc, char** argv) {
     input->openAll();
     auto ui = std::make_unique<Ui>(window, sdl, settings, *input);
     auto app = std::make_unique<App>();
+    auto audio = std::make_unique<Audio>();
 
     auto save = [&] { settings.save(iniPath, input->config()); };
     auto load = [&](const std::string& path) {
@@ -171,6 +173,11 @@ int main(int argc, char** argv) {
                     save();
                     break;
                 case SDL_SCANCODE_P: paused = !paused; break;
+                case SDL_SCANCODE_M:
+                    settings.mute = !settings.mute;
+                    ui->notify(settings.mute ? "Sonido silenciado" : "Sonido activado");
+                    save();
+                    break;
                 case SDL_SCANCODE_RETURN:
                     if (!alt) break;
                     [[fallthrough]];
@@ -201,7 +208,10 @@ int main(int argc, char** argv) {
 
         if (app->romLoaded && !paused) {
             app->console.setButtons(input->poll(!ui->keyboardBusy()));
+            app->console.psg().setSampleRate(audio->rate());
             app->console.runFrame();
+            audio->push(app->console.psg().samples(), settings.volume, settings.mute);
+            app->console.psg().clearSamples();
         }
 
         int w, h;
@@ -227,6 +237,7 @@ int main(int argc, char** argv) {
 
     app->saveBattery();
     save();
+    audio.reset();
     ui.reset();
     renderers.clear();
     input.reset();
