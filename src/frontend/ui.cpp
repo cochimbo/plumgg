@@ -348,6 +348,13 @@ void Ui::drawVideo(const UiState& state, UiActions& out) {
     ImGui::TextDisabled("(atajo en Opciones > Controles)");
     RenderOptions& r = settings_.render;
     ImGui::BeginDisabled(!r.pseudo3d);
+    int style = static_cast<int>(r.style);
+    ImGui::TextUnformatted("Estilo:");
+    ImGui::SameLine();
+    changed |= ImGui::RadioButton("Vóxeles", &style, static_cast<int>(Style3D::Voxels));
+    ImGui::SameLine();
+    changed |= ImGui::RadioButton("Capas", &style, static_cast<int>(Style3D::Layers));
+    r.style = static_cast<Style3D>(style);
     // Sliders save once released rather than on every frame of the drag.
     float depth = r.depth * 100.0f, thickness = r.thickness * 100.0f;
     if (ImGui::SliderFloat("Profundidad", &depth, 0.0f, 100.0f, "%.0f %%")) r.depth = depth / 100.0f;
@@ -359,6 +366,7 @@ void Ui::drawVideo(const UiState& state, UiActions& out) {
     changed |= ImGui::Checkbox("Sombra de los sprites", &r.shadows);
     if (ImGui::Button("Valores por defecto")) {
         const RenderOptions defaults;
+        r.style = defaults.style;
         r.depth = defaults.depth;
         r.tilt = defaults.tilt;
         r.thickness = defaults.thickness;

@@ -21,4 +21,12 @@ using Planes = std::array<std::vector<uint32_t>, kPlanes>;
 // sprites, and Sprites every sprite pixel, including those that priority tiles hide.
 void splitPlanes(const VideoFrame& frame, Planes& planes);
 
+// Writes into the alpha of every solid pixel how far it is from the plane's edge, in
+// pixels (city-block distance to the nearest empty pixel or the picture border), capped
+// at kMaxEdgeDistance: alpha = 255 - 16 * (kMaxEdgeDistance - distance). Empty pixels
+// keep alpha 0, so anything testing alpha >= 128 still sees the same shape. The voxel
+// view uses it to round off the edges of every shape.
+constexpr int kMaxEdgeDistance = 4;
+void markEdgeDistance(std::vector<uint32_t>& plane);
+
 }  // namespace plumgg

@@ -1,5 +1,5 @@
 // Core tests that need no external files: mapper paging, tiny ROMs drawing tiles and a
-// sprite, loading from a zip, the PSG, and splitting the picture into the pseudo-3D planes.
+// sprite, loading from a zip, the PSG, and the pseudo-3D planes and their edge distance.
 #include <algorithm>
 #include <cstdio>
 #include <cstdlib>
@@ -131,6 +131,21 @@ void testPlanes() {
     check(planes[PlaneSky][4] == black, "planes: sky filled in behind solid tiles");
 }
 
+// Edge distance for the voxel view: 1 on the outline of a shape, growing inwards up
+// to the cap, and empty pixels untouched.
+void testEdgeDistance() {
+    constexpr int kW = VideoFrame::kVisibleWidth;
+    std::vector<uint32_t> plane(kW * VideoFrame::kVisibleHeight, 0);
+    for (int y = 10; y < 30; ++y)
+        for (int x = 10; x < 30; ++x) plane[y * kW + x] = 0xFF123456u;
+    markEdgeDistance(plane);
+    auto distance = [&](int x, int y) { return kMaxEdgeDistance - (255 - int(plane[y * kW + x] >> 24)) / 16; };
+    check(distance(10, 10) == 1 && distance(29, 20) == 1, "edge distance: 1 on the outline");
+    check(distance(11, 20) == 2 && distance(20, 12) == 3, "edge distance: grows inwards");
+    check(distance(20, 20) == kMaxEdgeDistance, "edge distance: capped in the middle");
+    check(plane[0] == 0 && (plane[20 * kW + 20] & 0xFFFFFF) == 0x123456, "edge distance: colours untouched");
+}
+
 void testVdpInterrupt() {
     // ei; im 1; halt-loop. The frame interrupt handler at 0x38 counts into RAM.
     std::vector<uint8_t> rom(0x8000, 0x00);
@@ -220,6 +235,7 @@ int main() {
     testMapper();
     testTileRendering();
     testPlanes();
+    testEdgeDistance();
     testVdpInterrupt();
     testPsg();
     testZipRom();

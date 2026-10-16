@@ -50,8 +50,9 @@ protected:
 
 // Pulls the picture apart into planes and stands them up like a diorama seen from a
 // tilted camera: the sky at the back, then the background tiles, the sprites, and the
-// priority tiles at the front. Each raised plane can have sides down to the plane
-// below it, and sprites can cast a shadow on the background.
+// priority tiles at the front. In the layers style each raised plane is a cut-out
+// whose sides reach down towards the plane below it; in the voxels style every pixel
+// of a raised plane is a lit block. Sprites can cast a shadow on the background.
 class Pseudo3DRenderer : public Renderer {
 public:
     Pseudo3DRenderer();
@@ -63,6 +64,7 @@ public:
 
 private:
     gl::GLuint program_ = 0;
+    gl::GLuint voxelProgram_ = 0;
     gl::GLuint vao_ = 0;
     std::array<gl::GLuint, kPlanes> textures_{};
     Planes planes_;

@@ -94,6 +94,79 @@ void main() {
 }
 )";
 
+// One block per pixel of a plane, drawn instanced: instance i is pixel (i % 160,
+// i / 160) and its 30 vertices are five faces (the back one is never seen). Blocks
+// rise from uBottom; how far towards uTop depends on how far the pixel is from the
+// shape's edge (markEdgeDistance() stores it in alpha), so every shape is domed, and
+// the front face is lit by the slope of that dome so it reads as rounded rather than
+// stepped. Outer sides run from uBottom and are lit as walls; inner steps only fill the
+// gap down to the lower neighbour and take the front face's light so they blend into
+// the dome. Empty pixels and sides with nothing to show collapse to a point. The whole plane is
+// scaled by uScale so its front faces line up with the 2D picture at zero tilt.
+constexpr const char* kVoxelVertex = R"(#version 330 core
+uniform mat4 uViewProj;
+uniform sampler2D uImage;
+uniform float uTop;
+uniform float uBottom;
+uniform float uScale;
+flat out vec3 vColor;
+
+// 0 for an empty pixel, else 1..4 from the edge inwards.
+int level(ivec2 p) {
+    if (p.x < 0 || p.y < 0 || p.x >= 160 || p.y >= 144) return 0;
+    float a = texelFetch(uImage, p, 0).a * 255.0;
+    return a < 128.0 ? 0 : 4 - int(round((255.0 - a) / 16.0));
+}
+
+// Height of a block's front face: a rounded profile from the edge to the full height.
+float height(int level) {
+    return level == 0 ? uBottom : mix(uBottom, uTop, sqrt(float(level) / 4.0));
+}
+
+void main() {
+    ivec2 pixel = ivec2(gl_InstanceID % 160, gl_InstanceID / 160);
+    int face = gl_VertexID / 6;
+    int k = int[6](0, 1, 2, 2, 1, 3)[gl_VertexID % 6];
+    vec2 c = vec2(k & 1, k >> 1);
+    // Faces: 0 front (+z), 1 left, 2 right, 3 bottom, 4 top of the picture.
+    ivec2 next[5] = ivec2[5](ivec2(0), ivec2(-1, 0), ivec2(1, 0), ivec2(0, 1), ivec2(0, -1));
+    vec3 normals[5] = vec3[5](vec3(0, 0, 1), vec3(-1, 0, 0), vec3(1, 0, 0), vec3(0, -1, 0), vec3(0, 1, 0));
+    int own = level(pixel);
+    int neighbour = face > 0 ? level(pixel + next[face]) : 0;
+    if (own == 0 || (face > 0 && neighbour >= own)) {
+        gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+        vColor = vec3(0.0);
+        return;
+    }
+    float x0 = float(pixel.x) - 80.0, y0 = 71.0 - float(pixel.y);  // bottom-left corner
+    float top = height(own);
+    float z = mix(height(neighbour), top, c.y);
+    vec3 p;
+    if (face == 0) p = vec3(x0 + c.x, y0 + c.y, top);
+    else if (face == 1) p = vec3(x0, y0 + c.x, z);
+    else if (face == 2) p = vec3(x0 + 1.0, y0 + c.x, z);
+    else if (face == 3) p = vec3(x0 + c.x, y0, z);
+    else p = vec3(x0 + c.x, y0 + 1.0, z);
+    vec3 normal = normals[face];
+    if (face == 0 || neighbour > 0) {
+        float dx = height(level(pixel + ivec2(1, 0))) - height(level(pixel - ivec2(1, 0)));
+        float dy = height(level(pixel - ivec2(0, 1))) - height(level(pixel + ivec2(0, 1)));
+        normal = normalize(vec3(-0.5 * dx, -0.5 * dy, 1.0));
+    }
+    // Light from the top left, in front; a flat front face keeps the true colours.
+    const vec3 light = normalize(vec3(-0.5, 0.6, 0.8));
+    float shade = (0.4 + 0.6 * max(dot(normal, light), 0.0)) / (0.4 + 0.6 * light.z);
+    vColor = texelFetch(uImage, pixel, 0).rgb * min(shade, 1.1);
+    gl_Position = uViewProj * vec4(p.xy * uScale, p.z, 1.0);
+}
+)";
+
+constexpr const char* kVoxelFragment = R"(#version 330 core
+flat in vec3 vColor;
+out vec4 outColor;
+void main() { outColor = vec4(vColor, 1.0); }
+)";
+
 // Column-major 4x4 matrices, as OpenGL expects them.
 using Mat4 = std::array<float, 16>;
 
@@ -188,6 +261,7 @@ void LayerRenderer::compose(const VideoFrame& frame, uint32_t* out) {
 
 Pseudo3DRenderer::Pseudo3DRenderer() {
     program_ = gl::buildProgram(kPlaneVertex, kPlaneFragment);
+    voxelProgram_ = gl::buildProgram(kVoxelVertex, kVoxelFragment);
     gl::GenVertexArrays(1, &vao_);
     for (auto& t : textures_) t = makeTexture();
 }
@@ -195,11 +269,15 @@ Pseudo3DRenderer::Pseudo3DRenderer() {
 Pseudo3DRenderer::~Pseudo3DRenderer() {
     gl::DeleteTextures(kPlanes, textures_.data());
     gl::DeleteVertexArrays(1, &vao_);
+    gl::DeleteProgram(voxelProgram_);
     gl::DeleteProgram(program_);
 }
 
 void Pseudo3DRenderer::draw(const VideoFrame& frame, const Viewport& area) {
     splitPlanes(frame, planes_);
+    const bool voxels = options_.style == Style3D::Voxels;
+    if (voxels)
+        for (int p = PlaneBackground; p < kPlanes; ++p) markEdgeDistance(planes_[p]);
     for (int p = 0; p < kPlanes; ++p) upload(textures_[p], planes_[p].data(), options_.smooth);
 
     // Heights of the planes in Game Gear pixels: sky at 0, the rest stepping forward.
@@ -238,15 +316,32 @@ void Pseudo3DRenderer::draw(const VideoFrame& frame, const Viewport& area) {
 
     gl::Uniform1i(mode, 0);
     gl::ActiveTexture(gl::TEXTURE0);
-    for (int p = 0; p < kPlanes; ++p) {
+    const float thickness = std::clamp(options_.thickness, 0.0f, 1.0f);
+    // In the voxels style only the sky is a flat plane; the rest are drawn as blocks below.
+    for (int p = 0; p < (voxels ? 1 : int(kPlanes)); ++p) {
         // Sides made of slices about half a pixel apart so they read as solid.
-        const float side = (height[p] - height[below[p]]) * std::clamp(options_.thickness, 0.0f, 1.0f);
+        const float side = (height[p] - height[below[p]]) * thickness;
         const int count = 1 + std::min(32, static_cast<int>(std::ceil(side * 2.0f)));
         gl::Uniform1f(top, height[p]);
         gl::Uniform1f(step, count > 1 ? side / static_cast<float>(count - 1) : 0.0f);
         gl::Uniform1i(slices, count);
         gl::BindTexture(gl::TEXTURE_2D, textures_[p]);
         gl::DrawArraysInstanced(gl::TRIANGLE_STRIP, 0, 4, count);
+    }
+    if (voxels) {
+        gl::UseProgram(voxelProgram_);
+        gl::UniformMatrix4fv(gl::GetUniformLocation(voxelProgram_, "uViewProj"), 1, gl::FALSE_, viewProj.data());
+        gl::Uniform1i(gl::GetUniformLocation(voxelProgram_, "uImage"), 0);
+        for (int p = PlaneBackground; p < kPlanes; ++p) {
+            // Blocks are at least a pixel deep, so they still read as blocks at zero thickness.
+            const float side = std::max(1.0f, (height[p] - height[below[p]]) * thickness);
+            gl::Uniform1f(gl::GetUniformLocation(voxelProgram_, "uTop"), height[p]);
+            gl::Uniform1f(gl::GetUniformLocation(voxelProgram_, "uBottom"), height[p] - side);
+            gl::Uniform1f(gl::GetUniformLocation(voxelProgram_, "uScale"), (distance - height[p]) / distance);
+            gl::BindTexture(gl::TEXTURE_2D, textures_[p]);
+            gl::DrawArraysInstanced(gl::TRIANGLES, 0, 30, kW * kH);
+        }
+        gl::UseProgram(program_);
     }
 
     if (options_.shadows && depth > 0) {
