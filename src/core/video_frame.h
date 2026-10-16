@@ -34,6 +34,13 @@ struct VideoFrame {
     std::array<uint32_t, kWidth * kHeight> rgba{};  // final colour, 0xAARRGGBB
     std::array<PixelInfo, kWidth * kHeight> info{};
 
+    // The two planes before the VDP combined them, so a renderer can pull them apart
+    // without holes: what lies under a sprite, and the parts of sprites that priority
+    // tiles hide.
+    std::array<uint32_t, kWidth * kHeight> backgroundRgba{};
+    std::array<PixelInfo, kWidth * kHeight> backgroundInfo{};  // layer is never Sprite
+    std::array<uint32_t, kWidth * kHeight> spriteRgba{};       // alpha 0 where no sprite
+
     struct LineState {
         uint8_t scrollX;
         uint8_t scrollY;
