@@ -42,7 +42,7 @@ protected:
 // information the pseudo-3D renderer uses to separate depths.
 class LayerRenderer : public GlTextureRenderer {
 public:
-    const char* name() const override { return "capas"; }
+    const char* name() const override { return "capas (depuración)"; }
 
 protected:
     void compose(const VideoFrame& frame, uint32_t* out) override;
