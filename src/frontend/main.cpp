@@ -125,6 +125,8 @@ int main(int argc, char** argv) {
             if (settings.view == renderers[i]->name()) return i;
         return size_t{0};
     };
+    // An unknown view in the settings file (an old name, a typo) falls back to 2D.
+    settings.view = renderers[viewIndex()]->name();
 
     input->openAll();
     auto ui = std::make_unique<Ui>(window, context, settings, *input);

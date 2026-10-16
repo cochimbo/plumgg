@@ -312,6 +312,10 @@ void Ui::drawVideo(const UiState& state, UiActions& out) {
         }
         ImGui::EndCombo();
     }
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("2D: la imagen normal de la Game Gear.\n"
+                          "capas (depuración): pinta cada píxel según su capa (sprites naranja,\n"
+                          "fondo azul, fondo con prioridad verde); no son los colores del juego.");
 
     ImGui::SeparatorText("Imagen");
     int scale = static_cast<int>(settings_.render.scale);

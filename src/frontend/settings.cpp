@@ -89,7 +89,7 @@ bool Settings::save(const std::string& path, const InputConfig& input) const {
     input.write(out);
     auto flag = [](bool b) { return b ? "si" : "no"; };
     out << "\n[video]\n"
-        << "# vista: 2D o capas. escalado: entero, ajustar o estirar.\n"
+        << "# vista: 2D o capas (depuración, no son los colores del juego). escalado: entero, ajustar o estirar.\n"
         << "vista = " << view << "\n"
         << "escalado = " << kScaleNames[static_cast<int>(render.scale)] << "\n"
         << "suavizado = " << flag(render.smooth) << "\n"

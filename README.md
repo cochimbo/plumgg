@@ -35,7 +35,7 @@ Aún no hay mappers de Codemasters.
 | Botón 2   | X       | B / Y |
 | Start     | Intro   | Start |
 
-Teclas del emulador: `Ctrl+O` abre una ROM, `F1` reinicia, `F2` cambia de vista (2D / capas),
+Teclas del emulador: `Ctrl+O` abre una ROM, `F1` reinicia, `F2` cambia de vista (2D / capas de depuración),
 `P` pausa, `M` silencia el sonido, `F11` (o `Alt+Intro`) pantalla completa, `Esc` muestra u oculta la barra de menús.
 El efecto 3D se activa y desactiva con `F3` o con el botón Back/Select del mando; ambos se
 pueden cambiar en Opciones > Controles.
@@ -122,8 +122,10 @@ El VDP no dibuja en pantalla: rellena un `VideoFrame` (`src/core/video_frame.h`)
 color final de cada píxel y, además, de qué capa viene (fondo, fondo con prioridad, sprite o
 color de fondo), qué tile o sprite lo generó y el scroll de cada línea. También guarda el
 fondo y los sprites por separado antes de mezclarlos, así que se sabe qué hay debajo de un
-sprite y qué parte de un sprite tapan los tiles de prioridad. La vista "capas" (`F2`)
-muestra esa información.
+sprite y qué parte de un sprite tapan los tiles de prioridad. La vista "capas (depuración)"
+(`F2`) muestra esa información: tiñe cada píxel según su capa (sprites en naranja, fondo en
+azul, fondo con prioridad en verde y color de fondo en gris), así que no enseña los colores
+reales del juego. Para jugar, la vista es "2D".
 
 `splitPlanes()` (`src/render/planes.cpp`) reparte los píxeles en los cuatro planos y
 `Pseudo3DRenderer` sube cada uno como una textura y lo dibuja a su altura con una cámara en
