@@ -68,4 +68,26 @@ void markEdgeDistance(std::vector<uint32_t>& plane) {
         }
 }
 
+void markSolidTiles(const VideoFrame& frame, std::vector<uint32_t>& solid) {
+    constexpr int kW = VideoFrame::kVisibleWidth;
+    constexpr int kH = VideoFrame::kVisibleHeight;
+    std::array<uint16_t, 512> total{}, clear{};  // per tile pattern
+    auto at = [&](int x, int y) { return (y + VideoFrame::kVisibleY) * VideoFrame::kWidth + x + VideoFrame::kVisibleX; };
+    for (int y = 0; y < kH; ++y)
+        for (int x = 0; x < kW; ++x) {
+            const PixelInfo& bg = frame.backgroundInfo[at(x, y)];
+            if (bg.layer == PixelLayer::Backdrop) continue;
+            ++total[bg.source & 511];
+            if ((bg.colorIndex & 0x0F) == 0) ++clear[bg.source & 511];
+        }
+    solid.assign(kW * kH, 0);
+    for (int y = 0; y < kH; ++y)
+        for (int x = 0; x < kW; ++x) {
+            const PixelInfo& bg = frame.backgroundInfo[at(x, y)];
+            if (bg.layer == PixelLayer::Backdrop || (bg.colorIndex & 0x0F) == 0) continue;
+            const int pattern = bg.source & 511;
+            if (clear[pattern] * 4 <= total[pattern]) solid[y * kW + x] = 0xFFFFFFFFu;
+        }
+}
+
 }  // namespace plumgg

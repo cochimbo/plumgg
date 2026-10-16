@@ -76,6 +76,8 @@ bool Ui::handleEvent(const SDL_Event& e) {
 
 bool Ui::keyboardBusy() const { return capture_.active || ImGui::GetIO().WantCaptureKeyboard; }
 
+bool Ui::mouseBusy() const { return ImGui::GetIO().WantCaptureMouse; }
+
 void Ui::finishCapture(int code) {
     InputConfig c = input_.config();
     if (capture_.pad) {
@@ -363,20 +365,34 @@ void Ui::drawVideo(const UiState& state, UiActions& out) {
     float depth = r.depth * 100.0f, thickness = r.thickness * 100.0f;
     if (ImGui::SliderFloat("Profundidad", &depth, 0.0f, 100.0f, "%.0f %%")) r.depth = depth / 100.0f;
     changed |= ImGui::IsItemDeactivatedAfterEdit();
-    ImGui::SliderFloat("Inclinación", &r.tilt, 0.0f, 45.0f, "%.0f°");
+    ImGui::SliderFloat("Inclinación", &r.tilt, kMinTilt, kMaxTilt, "%.0f°");
+    changed |= ImGui::IsItemDeactivatedAfterEdit();
+    ImGui::SliderFloat("Giro", &r.yaw, -kMaxYaw, kMaxYaw, "%.0f°");
+    changed |= ImGui::IsItemDeactivatedAfterEdit();
+    ImGui::SliderFloat("Zoom", &r.zoom, kMinZoom, kMaxZoom, "%.2fx");
     changed |= ImGui::IsItemDeactivatedAfterEdit();
     if (ImGui::SliderFloat("Grosor", &thickness, 0.0f, 100.0f, "%.0f %%")) r.thickness = thickness / 100.0f;
     changed |= ImGui::IsItemDeactivatedAfterEdit();
+    ImGui::BeginDisabled(r.style != Style3D::Voxels);
+    float extrusion = r.extrusion * 100.0f;
+    if (ImGui::SliderFloat("Extrusión", &extrusion, 0.0f, 100.0f, "%.0f %%")) r.extrusion = extrusion / 100.0f;
+    changed |= ImGui::IsItemDeactivatedAfterEdit();
+    ImGui::EndDisabled();
     changed |= ImGui::Checkbox("Sombra de los sprites", &r.shadows);
     if (ImGui::Button("Valores por defecto")) {
         const RenderOptions defaults;
         r.style = defaults.style;
         r.depth = defaults.depth;
         r.tilt = defaults.tilt;
+        r.yaw = defaults.yaw;
+        r.zoom = defaults.zoom;
+        r.extrusion = defaults.extrusion;
         r.thickness = defaults.thickness;
         r.shadows = defaults.shadows;
         changed = true;
     }
+    ImGui::TextDisabled("Cámara: arrastra con el ratón o usa el stick derecho para girar,\n"
+                        "la rueda para acercar y doble clic o el clic del stick para centrarla.");
     ImGui::EndDisabled();
 
     out.settingsChanged |= changed;

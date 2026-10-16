@@ -95,21 +95,27 @@ void main() {
 )";
 
 // One block per pixel of a plane, drawn instanced: instance i is pixel (i % 160,
-// i / 160) and its 30 vertices are five faces (the back one is never seen). Blocks
-// rise from uBottom; how far towards uTop depends on how far the pixel is from the
-// shape's edge (markEdgeDistance() stores it in alpha), so every shape is domed, and
-// the front face is lit by the slope of that dome so it reads as rounded rather than
-// stepped. Outer sides run from uBottom and are lit as walls; inner steps only fill the
-// gap down to the lower neighbour and take the front face's light so they blend into
-// the dome. Empty pixels and sides with nothing to show collapse to a point. The whole plane is
-// scaled by uScale so its front faces line up with the 2D picture at zero tilt.
+// i / 160) and its 54 vertices are the front face plus two segments of each side (the
+// back face is never seen: the camera stays in front). Blocks rise from uBottom; how
+// far towards uTop depends on how far the pixel is from the shape's edge
+// (markEdgeDistance() stores it in alpha), so every shape is domed, and the front face
+// is lit by the slope of that dome so it reads as rounded rather than stepped. Pixels
+// of solid tiles (uSolid) reach a further uExtrude back, like 3DNES's extruded ground.
+// A side shows only what its neighbour does not cover: the upper segment is a step up
+// from a lower neighbour (lit like the front so it blends into the dome, or as a wall
+// at the shape's outline), the lower one the part of a deeper block that reaches past
+// a shallower neighbour. Empty pixels and hidden segments collapse to a point. The
+// whole plane is scaled by uScale so its front faces line up with the 2D picture when
+// the camera looks straight at it.
 constexpr const char* kVoxelVertex = R"(#version 330 core
 uniform mat4 uViewProj;
 uniform sampler2D uImage;
+uniform sampler2D uSolid;
 uniform float uTop;
 uniform float uBottom;
+uniform float uExtrude;
 uniform float uScale;
-flat out vec3 vColor;
+out vec3 vColor;
 
 // 0 for an empty pixel, else 1..4 from the edge inwards.
 int level(ivec2 p) {
@@ -123,46 +129,71 @@ float height(int level) {
     return level == 0 ? uBottom : mix(uBottom, uTop, sqrt(float(level) / 4.0));
 }
 
+float bottom(ivec2 p) {
+    return texelFetch(uSolid, p, 0).r > 0.5 ? uBottom - uExtrude : uBottom;
+}
+
 void main() {
     ivec2 pixel = ivec2(gl_InstanceID % 160, gl_InstanceID / 160);
     int face = gl_VertexID / 6;
     int k = int[6](0, 1, 2, 2, 1, 3)[gl_VertexID % 6];
     vec2 c = vec2(k & 1, k >> 1);
-    // Faces: 0 front (+z), 1 left, 2 right, 3 bottom, 4 top of the picture.
-    ivec2 next[5] = ivec2[5](ivec2(0), ivec2(-1, 0), ivec2(1, 0), ivec2(0, 1), ivec2(0, -1));
-    vec3 normals[5] = vec3[5](vec3(0, 0, 1), vec3(-1, 0, 0), vec3(1, 0, 0), vec3(0, -1, 0), vec3(0, 1, 0));
+    // Sides: 0 left, 1 right, 2 bottom, 3 top of the picture.
+    ivec2 next[4] = ivec2[4](ivec2(-1, 0), ivec2(1, 0), ivec2(0, 1), ivec2(0, -1));
+    vec3 normals[4] = vec3[4](vec3(-1, 0, 0), vec3(1, 0, 0), vec3(0, -1, 0), vec3(0, 1, 0));
+    int side = (face - 1) % 4;
+    bool lower = face > 4;
+
     int own = level(pixel);
-    int neighbour = face > 0 ? level(pixel + next[face]) : 0;
-    if (own == 0 || (face > 0 && neighbour >= own)) {
+    float top = height(own), base = bottom(pixel);
+    float from = top, to = top;  // the z range a side segment covers
+    bool wall = true;
+    if (face > 0) {
+        ivec2 n = pixel + next[side];
+        int other = level(n);
+        if (other == 0) {
+            if (!lower) from = base;
+        } else if (!lower) {
+            from = max(height(other), base);
+            wall = false;
+        } else {
+            to = min(bottom(n), top);
+            from = base;
+        }
+    }
+    if (own == 0 || (face > 0 && from >= to)) {
         gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
         vColor = vec3(0.0);
         return;
     }
+
     float x0 = float(pixel.x) - 80.0, y0 = 71.0 - float(pixel.y);  // bottom-left corner
-    float top = height(own);
-    float z = mix(height(neighbour), top, c.y);
+    float z = mix(from, to, c.y);
     vec3 p;
     if (face == 0) p = vec3(x0 + c.x, y0 + c.y, top);
-    else if (face == 1) p = vec3(x0, y0 + c.x, z);
-    else if (face == 2) p = vec3(x0 + 1.0, y0 + c.x, z);
-    else if (face == 3) p = vec3(x0 + c.x, y0, z);
+    else if (side == 0) p = vec3(x0, y0 + c.x, z);
+    else if (side == 1) p = vec3(x0 + 1.0, y0 + c.x, z);
+    else if (side == 2) p = vec3(x0 + c.x, y0, z);
     else p = vec3(x0 + c.x, y0 + 1.0, z);
-    vec3 normal = normals[face];
-    if (face == 0 || neighbour > 0) {
+
+    vec3 normal = face == 0 ? vec3(0, 0, 1) : normals[side];
+    if (face == 0 || !wall) {
         float dx = height(level(pixel + ivec2(1, 0))) - height(level(pixel - ivec2(1, 0)));
         float dy = height(level(pixel - ivec2(0, 1))) - height(level(pixel + ivec2(0, 1)));
         normal = normalize(vec3(-0.5 * dx, -0.5 * dy, 1.0));
     }
-    // Light from the top left, in front; a flat front face keeps the true colours.
+    // Light from the top left, in front; a flat front face keeps the true colours. Walls
+    // also darken the further back they reach.
     const vec3 light = normalize(vec3(-0.5, 0.6, 0.8));
     float shade = (0.4 + 0.6 * max(dot(normal, light), 0.0)) / (0.4 + 0.6 * light.z);
+    shade *= 1.0 - 0.45 * clamp((top - z) / 48.0, 0.0, 1.0);
     vColor = texelFetch(uImage, pixel, 0).rgb * min(shade, 1.1);
     gl_Position = uViewProj * vec4(p.xy * uScale, p.z, 1.0);
 }
 )";
 
 constexpr const char* kVoxelFragment = R"(#version 330 core
-flat in vec3 vColor;
+in vec3 vColor;
 out vec4 outColor;
 void main() { outColor = vec4(vColor, 1.0); }
 )";
@@ -189,12 +220,16 @@ Mat4 perspective(float fovY, float aspect, float zNear, float zFar) {
     return m;
 }
 
-// Camera `distance` away along +z, looking at the origin, with the scene tipped back
-// by `tilt` radians so the top of the picture moves away from the viewer.
-Mat4 view(float distance, float tilt) {
-    const float c = std::cos(tilt), s = std::sin(tilt);
-    Mat4 m{1, 0, 0, 0, 0, c, -s, 0, 0, s, c, 0, 0, 0, -distance, 1};
-    return m;
+// The camera orbits `pivot` (a point on the z axis) at `distance`: the scene turns by
+// `yaw` radians around its vertical axis, then tips back by `tilt` so the top of the
+// picture moves away from the viewer.
+Mat4 view(float distance, float tilt, float yaw, float pivot) {
+    const float ct = std::cos(tilt), st = std::sin(tilt), cy = std::cos(yaw), sy = std::sin(yaw);
+    const Mat4 translate{1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, -distance, 1};
+    const Mat4 tip{1, 0, 0, 0, 0, ct, -st, 0, 0, st, ct, 0, 0, 0, 0, 1};
+    const Mat4 turn{cy, 0, -sy, 0, 0, 1, 0, 0, sy, 0, cy, 0, 0, 0, 0, 1};
+    const Mat4 toPivot{1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, -pivot, 1};
+    return multiply(translate, multiply(tip, multiply(turn, toPivot)));
 }
 
 }  // namespace
@@ -264,10 +299,12 @@ Pseudo3DRenderer::Pseudo3DRenderer() {
     voxelProgram_ = gl::buildProgram(kVoxelVertex, kVoxelFragment);
     gl::GenVertexArrays(1, &vao_);
     for (auto& t : textures_) t = makeTexture();
+    solidTexture_ = makeTexture();
 }
 
 Pseudo3DRenderer::~Pseudo3DRenderer() {
     gl::DeleteTextures(kPlanes, textures_.data());
+    gl::DeleteTextures(1, &solidTexture_);
     gl::DeleteVertexArrays(1, &vao_);
     gl::DeleteProgram(voxelProgram_);
     gl::DeleteProgram(program_);
@@ -276,13 +313,18 @@ Pseudo3DRenderer::~Pseudo3DRenderer() {
 void Pseudo3DRenderer::draw(const VideoFrame& frame, const Viewport& area) {
     splitPlanes(frame, planes_);
     const bool voxels = options_.style == Style3D::Voxels;
-    if (voxels)
+    if (voxels) {
         for (int p = PlaneBackground; p < kPlanes; ++p) markEdgeDistance(planes_[p]);
+        markSolidTiles(frame, solid_);
+        upload(solidTexture_, solid_.data(), false);
+    }
     for (int p = 0; p < kPlanes; ++p) upload(textures_[p], planes_[p].data(), options_.smooth);
 
     // Heights of the planes in Game Gear pixels: sky at 0, the rest stepping forward.
     const float depth = std::clamp(options_.depth, 0.0f, 1.0f) * 48.0f;
-    const float height[kPlanes] = {0.0f, 0.45f * depth, 0.75f * depth, 1.0f * depth};
+    // Voxels push the sky back behind the extruded tiles.
+    const float extrude = voxels ? std::clamp(options_.extrusion, 0.0f, 1.0f) * 96.0f : 0.0f;
+    const float height[kPlanes] = {voxels ? -extrude - 2.0f : 0.0f, 0.45f * depth, 0.75f * depth, 1.0f * depth};
     // The plane each one's sides reach down to.
     const int below[kPlanes] = {PlaneSky, PlaneSky, PlaneBackground, PlaneBackground};
 
@@ -290,9 +332,16 @@ void Pseudo3DRenderer::draw(const VideoFrame& frame, const Viewport& area) {
     const float aspect = static_cast<float>(area.width) / static_cast<float>(std::max(area.height, 1));
     const float fov = 30.0f * 3.14159265f / 180.0f;
     const float halfHeight = 1.08f * (aspect >= float(kW) / kH ? kH / 2.0f : kW / 2.0f / aspect);
-    const float distance = halfHeight / std::tan(fov / 2);
-    const float tilt = std::clamp(options_.tilt, 0.0f, 60.0f) * 3.14159265f / 180.0f;
-    const Mat4 viewProj = multiply(perspective(fov, aspect, distance * 0.25f, distance * 3.0f), view(distance, tilt));
+    const float radians = 3.14159265f / 180.0f;
+    const float distance = halfHeight / std::tan(fov / 2) / std::clamp(options_.zoom, kMinZoom, kMaxZoom);
+    const float tilt = std::clamp(options_.tilt, kMinTilt, kMaxTilt) * radians;
+    const float yaw = std::clamp(options_.yaw, -kMaxYaw, kMaxYaw) * radians;
+    // Orbit the middle of the background's blocks. Planes are scaled as seen from where the
+    // camera sits when it looks straight on, `eye` along the z axis.
+    const float pivot = 0.5f * (height[PlaneBackground] - extrude);
+    const float eye = distance + pivot;
+    const Mat4 viewProj = multiply(perspective(fov, aspect, distance * 0.1f, distance * 3.0f + 2.0f * extrude),
+                                   view(distance, tilt, yaw, pivot));
 
     gl::Viewport(area.x, area.y, area.width, area.height);
     gl::Enable(gl::SCISSOR_TEST);
@@ -306,7 +355,7 @@ void Pseudo3DRenderer::draw(const VideoFrame& frame, const Viewport& area) {
     gl::UseProgram(program_);
     gl::BindVertexArray(vao_);
     gl::UniformMatrix4fv(gl::GetUniformLocation(program_, "uViewProj"), 1, gl::FALSE_, viewProj.data());
-    gl::Uniform1f(gl::GetUniformLocation(program_, "uDistance"), distance);
+    gl::Uniform1f(gl::GetUniformLocation(program_, "uDistance"), eye);
     gl::Uniform1i(gl::GetUniformLocation(program_, "uImage"), 0);
     gl::Uniform1i(gl::GetUniformLocation(program_, "uMask"), 1);
     const gl::GLint top = gl::GetUniformLocation(program_, "uTop");
@@ -332,14 +381,21 @@ void Pseudo3DRenderer::draw(const VideoFrame& frame, const Viewport& area) {
         gl::UseProgram(voxelProgram_);
         gl::UniformMatrix4fv(gl::GetUniformLocation(voxelProgram_, "uViewProj"), 1, gl::FALSE_, viewProj.data());
         gl::Uniform1i(gl::GetUniformLocation(voxelProgram_, "uImage"), 0);
+        gl::Uniform1i(gl::GetUniformLocation(voxelProgram_, "uSolid"), 1);
+        gl::ActiveTexture(gl::TEXTURE0 + 1);
+        gl::BindTexture(gl::TEXTURE_2D, solidTexture_);
+        gl::ActiveTexture(gl::TEXTURE0);
         for (int p = PlaneBackground; p < kPlanes; ++p) {
             // Blocks are at least a pixel deep, so they still read as blocks at zero thickness.
-            const float side = std::max(1.0f, (height[p] - height[below[p]]) * thickness);
+            // Sprites only take their own thickness; solid tiles also reach back by `extrude`.
+            const float floor = below[p] == PlaneSky ? 0.0f : height[below[p]];  // not the pushed-back sky
+            const float side = std::max(1.0f, (height[p] - floor) * thickness);
             gl::Uniform1f(gl::GetUniformLocation(voxelProgram_, "uTop"), height[p]);
             gl::Uniform1f(gl::GetUniformLocation(voxelProgram_, "uBottom"), height[p] - side);
-            gl::Uniform1f(gl::GetUniformLocation(voxelProgram_, "uScale"), (distance - height[p]) / distance);
+            gl::Uniform1f(gl::GetUniformLocation(voxelProgram_, "uExtrude"), p == PlaneSprites ? 0.0f : extrude);
+            gl::Uniform1f(gl::GetUniformLocation(voxelProgram_, "uScale"), (eye - height[p]) / eye);
             gl::BindTexture(gl::TEXTURE_2D, textures_[p]);
-            gl::DrawArraysInstanced(gl::TRIANGLES, 0, 30, kW * kH);
+            gl::DrawArraysInstanced(gl::TRIANGLES, 0, 54, kW * kH);
         }
         gl::UseProgram(program_);
     }

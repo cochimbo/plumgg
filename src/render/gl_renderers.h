@@ -67,7 +67,9 @@ private:
     gl::GLuint voxelProgram_ = 0;
     gl::GLuint vao_ = 0;
     std::array<gl::GLuint, kPlanes> textures_{};
+    gl::GLuint solidTexture_ = 0;
     Planes planes_;
+    std::vector<uint32_t> solid_;  // markSolidTiles() for the voxel style
 };
 
 }  // namespace plumgg

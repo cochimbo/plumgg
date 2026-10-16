@@ -67,7 +67,11 @@ Settings Settings::load(const std::string& path) {
             else if (key == "efecto_3d") s.render.pseudo3d = yes(value);
             else if (key == "estilo_3d") s.render.style = lower(value) == "capas" ? Style3D::Layers : Style3D::Voxels;
             else if (key == "profundidad_3d") s.render.depth = std::clamp(std::atoi(value.c_str()), 0, 100) / 100.0f;
-            else if (key == "inclinacion_3d") s.render.tilt = static_cast<float>(std::clamp(std::atoi(value.c_str()), 0, 45));
+            else if (key == "inclinacion_3d")
+                s.render.tilt = std::clamp(static_cast<float>(std::atof(value.c_str())), kMinTilt, kMaxTilt);
+            else if (key == "giro_3d") s.render.yaw = std::clamp(static_cast<float>(std::atof(value.c_str())), -kMaxYaw, kMaxYaw);
+            else if (key == "zoom_3d") s.render.zoom = std::clamp(static_cast<float>(std::atof(value.c_str())), kMinZoom, kMaxZoom);
+            else if (key == "extrusion_3d") s.render.extrusion = std::clamp(std::atoi(value.c_str()), 0, 100) / 100.0f;
             else if (key == "grosor_3d") s.render.thickness = std::clamp(std::atoi(value.c_str()), 0, 100) / 100.0f;
             else if (key == "sombras_3d") s.render.shadows = yes(value);
             else if (key == "tamano_ventana") s.windowScale = std::clamp(std::atoi(value.c_str()), 1, 8);
@@ -95,11 +99,14 @@ bool Settings::save(const std::string& path, const InputConfig& input) const {
         << "escalado = " << kScaleNames[static_cast<int>(render.scale)] << "\n"
         << "suavizado = " << flag(render.smooth) << "\n"
         << "efecto_3d = " << flag(render.pseudo3d) << "\n"
-        << "# estilo_3d: voxeles o capas. profundidad_3d y grosor_3d van de 0 a 100;\n"
-        << "# inclinacion_3d en grados, de 0 a 45.\n"
+        << "# estilo_3d: voxeles o capas. profundidad_3d, grosor_3d y extrusion_3d van de 0 a 100.\n"
+        << "# Cámara: inclinacion_3d de -10 a 80 grados, giro_3d de -75 a 75, zoom_3d de 0.5 a 3.\n"
         << "estilo_3d = " << (render.style == Style3D::Layers ? "capas" : "voxeles") << "\n"
         << "profundidad_3d = " << std::lround(render.depth * 100) << "\n"
         << "inclinacion_3d = " << std::lround(render.tilt) << "\n"
+        << "giro_3d = " << std::lround(render.yaw) << "\n"
+        << "zoom_3d = " << std::lround(render.zoom * 100) / 100.0 << "\n"
+        << "extrusion_3d = " << std::lround(render.extrusion * 100) << "\n"
         << "grosor_3d = " << std::lround(render.thickness * 100) << "\n"
         << "sombras_3d = " << flag(render.shadows) << "\n"
         << "tamano_ventana = " << windowScale << "\n"

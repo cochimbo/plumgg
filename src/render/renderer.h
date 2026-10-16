@@ -6,6 +6,9 @@ namespace plumgg {
 
 enum class ScaleMode { Integer, Fit, Stretch };
 
+// Camera limits for the pseudo-3D view, shared by the mouse, the pad and the menus.
+constexpr float kMinTilt = -10.0f, kMaxTilt = 80.0f, kMaxYaw = 75.0f, kMinZoom = 0.5f, kMaxZoom = 3.0f;
+
 // How the pseudo-3D view builds each plane: flat cut-outs, or one block per pixel.
 enum class Style3D { Layers, Voxels };
 
@@ -17,7 +20,10 @@ struct RenderOptions {
     // Pseudo-3D look, each 0..1 except the tilt.
     Style3D style = Style3D::Voxels;
     float depth = 0.6f;      // how far apart the layers are
-    float tilt = 25.0f;      // camera tilt in degrees; at 0 the picture looks flat
+    float tilt = 25.0f;      // camera tilt in degrees, -10..80; at 0 the picture looks flat
+    float yaw = 0.0f;        // camera turn around the vertical axis in degrees, -75..75
+    float zoom = 1.0f;       // 0.5..3
+    float extrusion = 0.5f;  // voxels: how far solid background tiles reach back
     float thickness = 1.0f;  // how much of the gap below a plane its sides (or blocks) fill
     bool shadows = true;     // sprites cast a shadow on the background
 };

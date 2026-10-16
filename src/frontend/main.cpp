@@ -1,6 +1,7 @@
 #include <SDL.h>
 
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <memory>
 #include <string>
@@ -151,6 +152,15 @@ int main(int argc, char** argv) {
     Uint64 next = SDL_GetPerformanceCounter();
     bool running = true;
     bool paused = false;
+    bool orbiting = false;  // dragging the pseudo-3D camera with the mouse
+    RenderOptions& cam = settings.render;
+    auto centreCamera = [&] {
+        const RenderOptions defaults;
+        cam.tilt = defaults.tilt;
+        cam.yaw = defaults.yaw;
+        cam.zoom = defaults.zoom;
+        save();
+    };
     while (running) {
         SDL_Event e;
         while (SDL_PollEvent(&e)) {
@@ -170,6 +180,24 @@ int main(int argc, char** argv) {
                 settings.render.pseudo3d = !settings.render.pseudo3d;
                 ui->notify(settings.render.pseudo3d ? "Efecto 3D activado" : "Efecto 3D desactivado");
                 save();
+            }
+            // The pseudo-3D camera: drag to turn it, wheel to zoom, double click to centre it.
+            if (cam.pseudo3d) {
+                if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT && !ui->mouseBusy()) {
+                    if (e.button.clicks >= 2) centreCamera();
+                    else orbiting = true;
+                } else if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT && orbiting) {
+                    orbiting = false;
+                    save();
+                } else if (e.type == SDL_MOUSEMOTION && orbiting) {
+                    cam.yaw = std::clamp(cam.yaw + 0.4f * static_cast<float>(e.motion.xrel), -kMaxYaw, kMaxYaw);
+                    cam.tilt = std::clamp(cam.tilt + 0.4f * static_cast<float>(e.motion.yrel), kMinTilt, kMaxTilt);
+                } else if (e.type == SDL_MOUSEWHEEL && !ui->mouseBusy()) {
+                    cam.zoom = std::clamp(cam.zoom * std::pow(1.1f, static_cast<float>(e.wheel.y)), kMinZoom, kMaxZoom);
+                    save();
+                } else if (e.type == SDL_CONTROLLERBUTTONDOWN && e.cbutton.button == SDL_CONTROLLER_BUTTON_RIGHTSTICK) {
+                    centreCamera();
+                }
             }
             if (e.type != SDL_KEYDOWN || e.key.repeat) continue;
             const bool ctrl = (e.key.keysym.mod & KMOD_CTRL) != 0;
@@ -220,6 +248,15 @@ int main(int argc, char** argv) {
         if (!sizedForMenu && !settings.fullscreen) {
             applyWindowScale(window, settings.windowScale, ui->menuHeight());
             sizedForMenu = true;
+        }
+
+        if (cam.pseudo3d) {
+            // The right stick turns the camera at up to 90 degrees a second.
+            float sx, sy;
+            input->rightStick(&sx, &sy);
+            const float step = 90.0f * static_cast<float>(kFrameSeconds);
+            cam.yaw = std::clamp(cam.yaw + sx * step, -kMaxYaw, kMaxYaw);
+            cam.tilt = std::clamp(cam.tilt + sy * step, kMinTilt, kMaxTilt);
         }
 
         if (app->romLoaded && !paused) {

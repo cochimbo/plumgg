@@ -73,8 +73,10 @@ Hay dos estilos:
 
 - **Vóxeles** (el de serie): cada píxel del fondo, los sprites y los tiles de prioridad es
   un bloque iluminado. Las formas se abomban desde el borde hacia dentro, así que los
-  personajes parecen figuritas y las plataformas bloques con los cantos redondeados. El
-  cielo queda plano al fondo.
+  personajes parecen figuritas y las plataformas bloques con los cantos redondeados.
+  Como en 3DNES, los tiles macizos del escenario (suelo, muros, plataformas: los que casi
+  no tienen color 0) se alargan hacia el fondo, así que al girar la cámara se ven como
+  bloques y pasillos. El cielo queda plano detrás de todo.
 - **Capas**: cada plano es un recorte plano, como de cartón grueso, con lados hasta el
   plano de detrás.
 
@@ -82,9 +84,14 @@ En los dos los sprites proyectan una sombra sobre el fondo. En Opciones > Vídeo
 
 - **Estilo**: vóxeles o capas.
 - **Profundidad**: cuánto se separan los planos.
-- **Inclinación**: cuánto se inclina la cámara.
+- **Inclinación**, **Giro** y **Zoom** de la cámara.
+- **Extrusión** (vóxeles): cuánto se alargan hacia el fondo los tiles macizos.
 - **Grosor**: cuánto de ese hueco rellenan los lados o los bloques de cada plano.
 - **Sombra de los sprites**.
+
+La cámara también se mueve sobre el juego: arrastra con el ratón o usa el stick derecho del
+mando para girarla, la rueda para acercarla, y doble clic o el clic del stick derecho para
+centrarla de nuevo.
 
 Hace falta una tarjeta gráfica con **OpenGL 3.3** (cualquier PC de los últimos diez años).
 Si no la hay, plumgg lo avisa al arrancar.
@@ -145,6 +152,8 @@ En el estilo capas, los lados de cada plano son copias apiladas y más oscuras d
 silueta. En el de vóxeles, `markEdgeDistance()` guarda en el alfa de cada píxel su
 distancia al borde de la forma (hasta 4). El vertex shader dibuja un bloque por píxel (un
 cubo sin cara trasera), con una altura que crece con esa distancia, e ilumina la cara
-frontal según la pendiente para que la forma se vea redondeada. No se dibujan los píxeles
-vacíos ni las caras ocultas. Los dos estilos hacen una sola llamada de dibujo por plano
+frontal según la pendiente para que la forma se vea redondeada. `markSolidTiles()` marca
+los píxeles de tiles macizos (como mucho una cuarta parte de color 0 en pantalla), cuyos
+bloques llegan mucho más atrás; el cielo se coloca detrás de esa extrusión. No se dibujan
+los píxeles vacíos ni las caras ocultas. Los dos estilos hacen una sola llamada de dibujo por plano
 (instancing).
