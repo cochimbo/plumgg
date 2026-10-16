@@ -25,7 +25,7 @@ namespace {
 bool isRom(const fs::path& p) {
     std::string ext = p.extension().string();
     std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-    return ext == ".gg" || ext == ".sms" || ext == ".bin";
+    return ext == ".gg" || ext == ".sms" || ext == ".bin" || ext == ".zip";
 }
 
 #ifdef _WIN32
@@ -61,7 +61,7 @@ DialogResult openRomDialog(SDL_Window* window, const std::string& startFolder, s
     OPENFILENAMEW ofn{};
     ofn.lStructSize = sizeof(ofn);
     ofn.hwndOwner = owner;
-    ofn.lpstrFilter = L"ROMs de Game Gear (*.gg, *.sms, *.bin)\0*.gg;*.sms;*.bin\0Todos los archivos\0*.*\0";
+    ofn.lpstrFilter = L"ROMs de Game Gear (*.gg, *.sms, *.bin, *.zip)\0*.gg;*.sms;*.bin;*.zip\0Todos los archivos\0*.*\0";
     ofn.lpstrFile = file;
     ofn.nMaxFile = static_cast<DWORD>(std::size(file));
     ofn.lpstrInitialDir = folder.empty() ? nullptr : folder.c_str();
