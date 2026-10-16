@@ -1,4 +1,5 @@
 // Minimal CP/M environment to run Frank Cringle's ZEXDOC / ZEXALL Z80 exercisers.
+#include <algorithm>
 #include <cstdio>
 #include <fstream>
 #include <iterator>
