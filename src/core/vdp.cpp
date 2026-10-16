@@ -142,8 +142,9 @@ void Vdp::renderLine(int line) {
     const uint8_t backdrop = static_cast<uint8_t>(16 + (regs_[7] & 0x0F));
     if (!display) {
         for (int x = 0; x < VideoFrame::kWidth; ++x) {
-            frame_.rgba[base + x] = palette_[backdrop];
-            frame_.info[base + x] = {backdrop, PixelLayer::Backdrop, 0};
+            frame_.rgba[base + x] = frame_.backgroundRgba[base + x] = palette_[backdrop];
+            frame_.info[base + x] = frame_.backgroundInfo[base + x] = {backdrop, PixelLayer::Backdrop, 0};
+            frame_.spriteRgba[base + x] = 0;
         }
         return;
     }
@@ -219,17 +220,21 @@ void Vdp::renderLine(int line) {
         const bool priority = entry & 0x1000;
         const uint8_t bgIndex = static_cast<uint8_t>(color + ((entry & 0x800) ? 16 : 0));
 
-        PixelInfo info;
-        if (maskColumn0 && x < 8) {
-            info = {backdrop, PixelLayer::Backdrop, 0};
-        } else if (spriteColor[x] >= 0 && !(priority && color != 0)) {
-            info = {static_cast<uint8_t>(16 + spriteColor[x]), PixelLayer::Sprite, spriteNumber[x]};
-        } else {
-            info = {bgIndex, priority ? PixelLayer::BackgroundPriority : PixelLayer::Background,
-                    static_cast<uint16_t>(pattern)};
-        }
+        const bool masked = maskColumn0 && x < 8;
+        const PixelInfo background =
+            masked ? PixelInfo{backdrop, PixelLayer::Backdrop, 0}
+                   : PixelInfo{bgIndex, priority ? PixelLayer::BackgroundPriority : PixelLayer::Background,
+                               static_cast<uint16_t>(pattern)};
+        const bool sprite = !masked && spriteColor[x] >= 0;
+        const PixelInfo info = sprite && !(priority && color != 0)
+                                   ? PixelInfo{static_cast<uint8_t>(16 + spriteColor[x]), PixelLayer::Sprite,
+                                               spriteNumber[x]}
+                                   : background;
         frame_.info[base + x] = info;
         frame_.rgba[base + x] = palette_[info.colorIndex];
+        frame_.backgroundInfo[base + x] = background;
+        frame_.backgroundRgba[base + x] = palette_[background.colorIndex];
+        frame_.spriteRgba[base + x] = sprite ? palette_[16 + spriteColor[x]] : 0;
     }
 }
 

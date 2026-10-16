@@ -28,10 +28,10 @@ struct UiState {
     std::vector<const char*> views;  // Renderer::name() of each available view
 };
 
-// Menu bar and option windows, drawn with Dear ImGui on top of the game.
+// Menu bar and option windows, drawn with Dear ImGui (OpenGL 3) on top of the game.
 class Ui {
 public:
-    Ui(SDL_Window* window, SDL_Renderer* renderer, Settings& settings, Input& input);
+    Ui(SDL_Window* window, SDL_GLContext context, Settings& settings, Input& input);
     ~Ui();
     Ui(const Ui&) = delete;
     Ui& operator=(const Ui&) = delete;
@@ -68,7 +68,6 @@ private:
     void finishCapture(int keyOrButton);
 
     SDL_Window* window_;
-    SDL_Renderer* renderer_;
     Settings& settings_;
     Input& input_;
     FileBrowser browser_;
