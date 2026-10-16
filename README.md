@@ -11,7 +11,10 @@ en pseudo-3D; esta primera versión es la base: CPU, vídeo, cartuchos, ventana 
   cuadro y de línea, contadores V/H.
 - **Cartuchos** con el mapper estándar de Sega y RAM de cartucho (guarda partidas en un
   `.sav` junto a la ROM).
-- **Ventana SDL2**: escala entera, redimensionable, arrastra una ROM encima para cargarla.
+- **Ventana SDL2** con barra de menús: abrir ROM (diálogo de Windows o arrastrando el
+  archivo), lista de recientes, pausa y reinicio, ventana de **Controles** para asignar
+  teclas y botones del mando, y ventana de **Vídeo** (vista, escala entera / ajustar /
+  estirar, suavizado, tamaño de ventana, pantalla completa).
 - **Mandos y teclado** configurables (ver más abajo). Admite cualquier mando que SDL
   reconozca (Xbox, PlayStation, Switch Pro y compatibles) y se pueden conectar en caliente.
 
@@ -26,7 +29,14 @@ Aún no hay sonido (PSG SN76489) ni mappers de Codemasters.
 | Botón 2   | X       | B / Y |
 | Start     | Intro   | Start |
 
-Teclas del emulador: `F1` reinicia, `F2` cambia de vista (2D / capas), `P` pausa, `Esc` sale.
+Teclas del emulador: `Ctrl+O` abre una ROM, `F1` reinicia, `F2` cambia de vista (2D / capas),
+`P` pausa, `F11` (o `Alt+Intro`) pantalla completa, `Esc` muestra u oculta la barra de menús.
+El efecto 3D se activa y desactiva con `F3` o con el botón Back/Select del mando; ambos se
+pueden cambiar en Opciones > Controles. (La vista pseudo-3D aún no existe; el interruptor
+queda guardado para cuando llegue.)
+
+Lo más cómodo es cambiar los controles desde **Opciones > Controles**: pulsa la casilla y
+luego la tecla o el botón. Todo se guarda en `plumgg.ini`.
 
 La primera vez que se abre, plumgg crea `plumgg.ini` en la carpeta de ajustes del usuario
 (`%APPDATA%\plumgg\plumgg\` en Windows). Si pones un `plumgg.ini` junto al ejecutable, se
@@ -41,9 +51,12 @@ boton2 = b
 stick_como_cruceta = si
 ```
 
+El mismo archivo guarda las opciones de vídeo (`[video]`) y las ROMs recientes (`[recientes]`).
+
 ## Compilar
 
-Hace falta CMake 3.16+ y un compilador C++17.
+Hace falta CMake 3.16+ y un compilador C++17. CMake descarga Dear ImGui (la interfaz de
+menús) automáticamente.
 
 **Windows (Visual Studio 2022):**
 
@@ -71,7 +84,7 @@ build/zex_runner zexdoc.com         # ejercitador completo de la Z80
 ```
 src/core/      emulación pura, sin SDL: z80, vdp, cartridge, gamegear
 src/render/    renderers: convierten un VideoFrame en imagen
-src/frontend/  ventana, bucle principal y controles (SDL2)
+src/frontend/  ventana, bucle principal, controles y menús (SDL2 + Dear ImGui)
 tests/         tests del núcleo y ejecutor de ZEXDOC/ZEXALL
 installer/     instalador de Windows (Inno Setup)
 ```
