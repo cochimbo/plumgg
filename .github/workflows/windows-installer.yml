@@ -103,3 +103,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: dist-installer/*.exe
+          # Tags with a suffix (v0.0.1-alpha, v1.0.0-rc1) are published as prereleases.
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          generate_release_notes: true
