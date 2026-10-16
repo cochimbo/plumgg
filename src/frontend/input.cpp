@@ -13,6 +13,7 @@ namespace {
 // Names used in the [teclado] / [mando] sections of the .ini file.
 constexpr const char* kButtonNames[InputConfig::kButtons] = {"arriba", "abajo", "izquierda", "derecha",
                                                              "boton1", "boton2", "start"};
+constexpr const char* kHotkeyNames[InputConfig::kHotkeys] = {"efecto_3d"};
 
 std::string trim(const std::string& s) {
     size_t b = s.find_first_not_of(" \t\r\n");
@@ -28,6 +29,12 @@ std::string lower(std::string s) {
 int buttonIndex(const std::string& name) {
     for (int i = 0; i < InputConfig::kButtons; ++i)
         if (name == kButtonNames[i]) return i;
+    return -1;
+}
+
+int hotkeyIndex(const std::string& name) {
+    for (int i = 0; i < InputConfig::kHotkeys; ++i)
+        if (name == kHotkeyNames[i]) return i;
     return -1;
 }
 
@@ -57,6 +64,8 @@ InputConfig InputConfig::defaults() {
     set(GgButton::Button1, {SDL_SCANCODE_Z}, {SDL_CONTROLLER_BUTTON_A, SDL_CONTROLLER_BUTTON_X});
     set(GgButton::Button2, {SDL_SCANCODE_X}, {SDL_CONTROLLER_BUTTON_B, SDL_CONTROLLER_BUTTON_Y});
     set(GgButton::Start, {SDL_SCANCODE_RETURN}, {SDL_CONTROLLER_BUTTON_START});
+    c.hotkeyKeys[static_cast<int>(Hotkey::Toggle3D)] = {SDL_SCANCODE_F3};
+    c.hotkeyPad[static_cast<int>(Hotkey::Toggle3D)] = {SDL_CONTROLLER_BUTTON_BACK};
     return c;
 }
 
@@ -89,18 +98,21 @@ InputConfig InputConfig::loadOrCreate(const std::string& path) {
             continue;
         }
         const int b = buttonIndex(key);
-        if (b < 0) continue;
+        const int h = hotkeyIndex(key);
+        if (b < 0 && h < 0) continue;
         if (section == "teclado") {
-            c.keys[b].clear();
+            auto& list = b >= 0 ? c.keys[b] : c.hotkeyKeys[h];
+            list.clear();
             for (const auto& name : splitList(value)) {
                 SDL_Scancode sc = SDL_GetScancodeFromName(name.c_str());
-                if (sc != SDL_SCANCODE_UNKNOWN) c.keys[b].push_back(sc);
+                if (sc != SDL_SCANCODE_UNKNOWN) list.push_back(sc);
             }
         } else if (section == "mando") {
-            c.pad[b].clear();
+            auto& list = b >= 0 ? c.pad[b] : c.hotkeyPad[h];
+            list.clear();
             for (const auto& name : splitList(value)) {
                 SDL_GameControllerButton gb = SDL_GameControllerGetButtonFromString(lower(name).c_str());
-                if (gb != SDL_CONTROLLER_BUTTON_INVALID) c.pad[b].push_back(gb);
+                if (gb != SDL_CONTROLLER_BUTTON_INVALID) list.push_back(gb);
             }
         }
     }
@@ -110,24 +122,33 @@ InputConfig InputConfig::loadOrCreate(const std::string& path) {
 bool InputConfig::save(const std::string& path) const {
     std::ofstream out(path);
     if (!out) return false;
+    write(out);
+    return static_cast<bool>(out);
+}
+
+void InputConfig::write(std::ostream& out) const {
+    auto keyList = [&](const char* name, const std::vector<SDL_Scancode>& list) {
+        out << name << " = ";
+        for (size_t k = 0; k < list.size(); ++k) out << (k ? ", " : "") << SDL_GetScancodeName(list[k]);
+        out << "\n";
+    };
+    auto padList = [&](const char* name, const std::vector<SDL_GameControllerButton>& list) {
+        out << name << " = ";
+        for (size_t k = 0; k < list.size(); ++k) out << (k ? ", " : "") << SDL_GameControllerGetStringForButton(list[k]);
+        out << "\n";
+    };
     out << "# Controles de plumgg. Puedes poner varias teclas o botones separados por comas.\n"
            "# Teclas: nombres de SDL (Up, Down, Left, Right, Z, X, Return, Space, Left Shift...).\n"
            "# Botones de mando: a, b, x, y, back, guide, start, leftstick, rightstick,\n"
-           "# leftshoulder, rightshoulder, dpup, dpdown, dpleft, dpright.\n\n[teclado]\n";
-    for (int i = 0; i < kButtons; ++i) {
-        out << kButtonNames[i] << " = ";
-        for (size_t k = 0; k < keys[i].size(); ++k) out << (k ? ", " : "") << SDL_GetScancodeName(keys[i][k]);
-        out << "\n";
-    }
+           "# leftshoulder, rightshoulder, dpup, dpdown, dpleft, dpright.\n"
+           "# efecto_3d activa y desactiva el efecto pseudo-3D.\n\n[teclado]\n";
+    for (int i = 0; i < kButtons; ++i) keyList(kButtonNames[i], keys[i]);
+    for (int i = 0; i < kHotkeys; ++i) keyList(kHotkeyNames[i], hotkeyKeys[i]);
     out << "\n[mando]\n";
-    for (int i = 0; i < kButtons; ++i) {
-        out << kButtonNames[i] << " = ";
-        for (size_t k = 0; k < pad[i].size(); ++k) out << (k ? ", " : "") << SDL_GameControllerGetStringForButton(pad[i][k]);
-        out << "\n";
-    }
+    for (int i = 0; i < kButtons; ++i) padList(kButtonNames[i], pad[i]);
+    for (int i = 0; i < kHotkeys; ++i) padList(kHotkeyNames[i], hotkeyPad[i]);
     out << "stick_como_cruceta = " << (stickAsDpad ? "si" : "no") << "\n";
     out << "zona_muerta = " << stickDeadzone << "\n";
-    return static_cast<bool>(out);
 }
 
 Input::~Input() {
@@ -158,11 +179,34 @@ void Input::handleEvent(const SDL_Event& e) {
     }
 }
 
-Buttons Input::poll() const {
+Hotkey Input::hotkeyFor(const SDL_Event& e) const {
+    for (int h = 0; h < InputConfig::kHotkeys; ++h) {
+        if (e.type == SDL_KEYDOWN && !e.key.repeat) {
+            for (SDL_Scancode sc : config_.hotkeyKeys[h])
+                if (sc == e.key.keysym.scancode) return static_cast<Hotkey>(h);
+        } else if (e.type == SDL_CONTROLLERBUTTONDOWN) {
+            for (SDL_GameControllerButton gb : config_.hotkeyPad[h])
+                if (gb == e.cbutton.button) return static_cast<Hotkey>(h);
+        }
+    }
+    return Hotkey::Count;
+}
+
+std::vector<std::string> Input::padNames() const {
+    std::vector<std::string> names;
+    for (auto* p : pads_) {
+        const char* n = SDL_GameControllerName(p);
+        names.push_back(n ? n : "Mando");
+    }
+    return names;
+}
+
+Buttons Input::poll(bool useKeyboard) const {
     std::array<bool, InputConfig::kButtons> down{};
     const Uint8* kb = SDL_GetKeyboardState(nullptr);
     for (int b = 0; b < InputConfig::kButtons; ++b) {
-        for (SDL_Scancode sc : config_.keys[b]) down[b] = down[b] || kb[sc];
+        if (useKeyboard)
+            for (SDL_Scancode sc : config_.keys[b]) down[b] = down[b] || kb[sc];
         for (auto* p : pads_)
             for (SDL_GameControllerButton gb : config_.pad[b]) down[b] = down[b] || SDL_GameControllerGetButton(p, gb);
     }
