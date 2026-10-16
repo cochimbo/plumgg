@@ -75,6 +75,8 @@ Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExeName}"; Tasks: deskto
 [Registry]
 ; Asociación de .gg, escrita en HKCU o HKLM según el modo de instalación.
 Root: HKA; Subkey: "Software\Classes\.gg\OpenWithProgids"; ValueType: string; ValueName: "plumgg.ggrom"; ValueData: ""; Flags: uninsdeletevalue; Tasks: assocgg
+; Los .zip solo se añaden a "Abrir con", sin quitar el programa que los abre por defecto.
+Root: HKA; Subkey: "Software\Classes\.zip\OpenWithProgids"; ValueType: string; ValueName: "plumgg.ggrom"; ValueData: ""; Flags: uninsdeletevalue; Tasks: assocgg
 Root: HKA; Subkey: "Software\Classes\plumgg.ggrom"; ValueType: string; ValueName: ""; ValueData: "{cm:GGFileDesc}"; Flags: uninsdeletekey; Tasks: assocgg
 Root: HKA; Subkey: "Software\Classes\plumgg.ggrom\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\{#AppExeName},0"; Tasks: assocgg
 Root: HKA; Subkey: "Software\Classes\plumgg.ggrom\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#AppExeName}"" ""%1"""; Tasks: assocgg

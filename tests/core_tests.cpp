@@ -1,9 +1,12 @@
 // Core tests that need no external files: mapper paging and a tiny ROM drawing a tile.
 #include <cstdio>
 #include <cstdlib>
+#include <fstream>
+#include <string>
 #include <vector>
 
 #include "core/gamegear.h"
+#include "miniz.h"
 
 using namespace plumgg;
 
@@ -97,12 +100,43 @@ void testVdpInterrupt() {
     check(gg.peek(0xE000) == gg.peek(0xC000), "work RAM is mirrored at 0xE000");
 }
 
+bool writeZip(const std::string& path, const std::vector<std::pair<std::string, std::vector<uint8_t>>>& entries) {
+    mz_zip_archive zip{};
+    if (!mz_zip_writer_init_heap(&zip, 0, 0)) return false;
+    for (const auto& [name, data] : entries) {
+        mz_zip_writer_add_mem(&zip, name.c_str(), data.data(), data.size(), MZ_DEFAULT_COMPRESSION);
+    }
+    void* buf = nullptr;
+    size_t size = 0;
+    const bool ok = mz_zip_writer_finalize_heap_archive(&zip, &buf, &size);
+    if (ok) std::ofstream(path, std::ios::binary).write(static_cast<const char*>(buf), static_cast<std::streamsize>(size));
+    mz_free(buf);
+    mz_zip_writer_end(&zip);
+    return ok;
+}
+
+void testZipRom() {
+    std::vector<uint8_t> rom(2 * 0x4000);
+    for (size_t i = 0; i < rom.size(); ++i) rom[i] = static_cast<uint8_t>(i / 0x4000 + 0x40);
+    const std::string path = "core_tests_rom.zip";
+    writeZip(path, {{"LEEME.txt", {'h', 'o', 'l', 'a'}}, {"juego/Sonic.GG", rom}, {"otro.sms", {0x00}}});
+    Cartridge cart;
+    std::string error;
+    check(cart.loadFile(path, &error) && cart.romSize() == rom.size(), "ROM loads from a zip");
+    check(cart.read(0x0000) == 0x40 && cart.read(0x4000) == 0x41, "first ROM entry in the zip is used");
+
+    writeZip(path, {{"LEEME.txt", {'h', 'o', 'l', 'a'}}});
+    check(!cart.loadFile(path, &error) && !error.empty(), "zip without a ROM is rejected");
+    std::remove(path.c_str());
+}
+
 }  // namespace
 
 int main() {
     testMapper();
     testTileRendering();
     testVdpInterrupt();
+    testZipRom();
     std::printf(failures ? "%d fallos\n" : "todo bien\n", failures);
     return failures ? EXIT_FAILURE : EXIT_SUCCESS;
 }

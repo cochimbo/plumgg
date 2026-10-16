@@ -5,7 +5,8 @@
 
 - Copia el emulador (`plumgg.exe`), `SDL2.dll` y cualquier otro archivo que acompañe al ejecutable.
 - Crea el acceso directo en el menú Inicio y, opcionalmente, en el escritorio.
-- Puede asociar los archivos `.gg` (ROMs de Game Gear) para abrirlos con doble clic.
+- Puede asociar los archivos `.gg` (ROMs de Game Gear) para abrirlos con doble clic, y añade
+  plumgg al menú "Abrir con" de los `.zip` (sin cambiar el programa que los abre por defecto).
 - Se instala sin pedir permisos de administrador (o para todos los usuarios, si se elige).
 - Está en español e inglés.
 
