@@ -9,7 +9,7 @@
 namespace plumgg {
 
 // Everything the menus change apart from the controls. Lives in plumgg.ini next to
-// the [teclado] / [mando] sections, under [video] and [recientes].
+// the [teclado] / [mando] sections, under [video], [audio] and [recientes].
 struct Settings {
     static constexpr size_t kMaxRecent = 10;
 
@@ -18,6 +18,8 @@ struct Settings {
     int windowScale = 4;
     bool fullscreen = false;
     bool showMenu = true;
+    int volume = 80;  // 0-100
+    bool mute = false;
     std::vector<std::string> recent;  // most recent first
     std::string lastFolder;
 

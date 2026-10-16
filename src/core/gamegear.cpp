@@ -15,6 +15,7 @@ void GameGear::reset() {
     cpu_.sp = 0xDFF0;
     cpu_.im = 1;
     vdp_.reset();
+    psg_.reset();
     cart_.reset();
     ram_.fill(0);
     ggRegs_ = {0xC0, 0x7F, 0xFF, 0x00, 0xFF, 0x00, 0xFF};
@@ -27,7 +28,9 @@ void GameGear::runFrame() {
         // Cycles that overran the previous line are carried over.
         while (lineCycle_ < kCyclesPerLine) {
             cpu_.setIrqLine(vdp_.irqAsserted());
-            lineCycle_ += cpu_.step();
+            const int cycles = cpu_.step();
+            lineCycle_ += cycles;
+            psg_.run(cycles);
         }
         lineCycle_ -= kCyclesPerLine;
     }
@@ -70,9 +73,13 @@ void GameGear::out(uint16_t port16, uint8_t value) {
     const uint8_t port = static_cast<uint8_t>(port16);
     if (port < 0x40) {
         if (port >= 0x01 && port <= 0x06) ggRegs_[port] = value;
+        if (port == 0x06) psg_.setStereo(value);
         return;  // memory / I/O control registers have no visible effect on the Game Gear
     }
-    if (port < 0x80) return;  // SN76489 PSG: sound is not emulated yet
+    if (port < 0x80) {
+        psg_.write(value);
+        return;
+    }
     if (port < 0xC0) {
         if (port & 1) vdp_.writeControl(value); else vdp_.writeData(value);
     }

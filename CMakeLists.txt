@@ -18,6 +18,7 @@ add_library(plumgg_core STATIC
   src/core/z80.cpp
   src/core/vdp.cpp
   src/core/cartridge.cpp
+  src/core/psg.cpp
   src/core/gamegear.cpp
   src/render/planes.cpp
 )
@@ -75,6 +76,7 @@ target_link_libraries(plumgg_imgui PUBLIC ${PLUMGG_SDL2_TARGET})
 add_executable(plumgg WIN32
   src/frontend/main.cpp
   src/frontend/input.cpp
+  src/frontend/audio.cpp
   src/frontend/settings.cpp
   src/frontend/file_dialog.cpp
   src/frontend/ui.cpp

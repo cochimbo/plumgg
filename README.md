@@ -19,10 +19,12 @@ los enseña como un diorama visto con la cámara inclinada.
   teclas y botones del mando, y ventana de **Vídeo** (vista, escala entera / ajustar /
   estirar, suavizado, tamaño de ventana, pantalla completa, opciones del efecto 3D).
 - **Efecto pseudo-3D** (ver más abajo).
+- **Sonido**: el PSG SN76489 completo (tres canales de tono y uno de ruido) con el estéreo
+  propio de la Game Gear. Volumen y silencio en **Opciones > Sonido**, o `M` para silenciar.
 - **Mandos y teclado** configurables (ver más abajo). Admite cualquier mando que SDL
   reconozca (Xbox, PlayStation, Switch Pro y compatibles) y se pueden conectar en caliente.
 
-Aún no hay sonido (PSG SN76489) ni mappers de Codemasters.
+Aún no hay mappers de Codemasters.
 
 ## Controles
 
@@ -34,7 +36,7 @@ Aún no hay sonido (PSG SN76489) ni mappers de Codemasters.
 | Start     | Intro   | Start |
 
 Teclas del emulador: `Ctrl+O` abre una ROM, `F1` reinicia, `F2` cambia de vista (2D / capas),
-`P` pausa, `F11` (o `Alt+Intro`) pantalla completa, `Esc` muestra u oculta la barra de menús.
+`P` pausa, `M` silencia el sonido, `F11` (o `Alt+Intro`) pantalla completa, `Esc` muestra u oculta la barra de menús.
 El efecto 3D se activa y desactiva con `F3` o con el botón Back/Select del mando; ambos se
 pueden cambiar en Opciones > Controles.
 

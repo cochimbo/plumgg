@@ -1,5 +1,6 @@
 // Core tests that need no external files: mapper paging, tiny ROMs drawing tiles and a
-// sprite, loading from a zip, and splitting the picture into the pseudo-3D planes.
+// sprite, loading from a zip, the PSG, and splitting the picture into the pseudo-3D planes.
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
@@ -152,6 +153,37 @@ void testVdpInterrupt() {
     check(gg.peek(0xE000) == gg.peek(0xC000), "work RAM is mirrored at 0xE000");
 }
 
+void testPsg() {
+    Psg psg;
+    psg.setSampleRate(44100);
+    psg.write(0x80 | 0x0E);  // tone 0 period low bits: 0x0FE -> ~440 Hz
+    psg.write(0x0F);
+    psg.write(0x90);         // tone 0 at full volume
+    psg.setStereo(0x01);     // tone 0 on the right only
+    psg.run(3579545 / 10);   // a tenth of a second
+    const auto& s = psg.samples();
+    check(s.size() / 2 >= 4405 && s.size() / 2 <= 4415, "a tenth of a second at 44.1 kHz");
+    int crossings = 0, leftPeak = 0, rightPeak = 0;
+    for (size_t i = 0; i + 2 < s.size(); i += 2) {
+        if ((s[i + 1] > 0) != (s[i + 3] > 0)) ++crossings;
+        leftPeak = std::max(leftPeak, std::abs(int(s[i])));
+        rightPeak = std::max(rightPeak, std::abs(int(s[i + 1])));
+    }
+    check(crossings >= 86 && crossings <= 90, "tone 0 plays at about 440 Hz");
+    check(leftPeak == 0 && rightPeak > 7000, "stereo register routes tone 0 to the right");
+
+    psg.clearSamples();
+    psg.write(0x9F);         // tone 0 off
+    psg.write(0xE4);         // white noise, fastest rate
+    psg.write(0xF0);         // noise at full volume
+    psg.setStereo(0xFF);
+    psg.run(3579545 / 10);
+    int changes = 0;
+    for (size_t i = 0; i + 2 < psg.samples().size(); i += 2)
+        if (psg.samples()[i] != psg.samples()[i + 2]) ++changes;
+    check(changes > 300, "noise channel produces noise");
+}
+
 bool writeZip(const std::string& path, const std::vector<std::pair<std::string, std::vector<uint8_t>>>& entries) {
     mz_zip_archive zip{};
     if (!mz_zip_writer_init_heap(&zip, 0, 0)) return false;
@@ -189,6 +221,7 @@ int main() {
     testTileRendering();
     testPlanes();
     testVdpInterrupt();
+    testPsg();
     testZipRom();
     std::printf(failures ? "%d fallos\n" : "todo bien\n", failures);
     return failures ? EXIT_FAILURE : EXIT_SUCCESS;

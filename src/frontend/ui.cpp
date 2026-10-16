@@ -171,6 +171,16 @@ void Ui::drawMenuBar(const UiState& state, UiActions& out) {
     if (ImGui::BeginMenu("Opciones")) {
         if (ImGui::MenuItem("Controles...")) showControls_ = true;
         if (ImGui::MenuItem("Vídeo...")) showVideo_ = true;
+        if (ImGui::BeginMenu("Sonido")) {
+            if (ImGui::MenuItem("Silenciar", "M", settings_.mute)) {
+                settings_.mute = !settings_.mute;
+                out.settingsChanged = true;
+            }
+            ImGui::SetNextItemWidth(160);
+            ImGui::SliderInt("Volumen", &settings_.volume, 0, 100, "%d%%", ImGuiSliderFlags_AlwaysClamp);
+            if (ImGui::IsItemDeactivatedAfterEdit()) out.settingsChanged = true;
+            ImGui::EndMenu();
+        }
         ImGui::Separator();
         if (ImGui::MenuItem("Efecto 3D", nullptr, settings_.render.pseudo3d)) {
             settings_.render.pseudo3d = !settings_.render.pseudo3d;
@@ -374,6 +384,7 @@ void Ui::drawAbout() {
     ImGui::BulletText("F1  reiniciar");
     ImGui::BulletText("F2  cambiar de vista");
     ImGui::BulletText("P  pausa");
+    ImGui::BulletText("M  silenciar el sonido");
     ImGui::BulletText("F11  pantalla completa");
     ImGui::BulletText("Esc  mostrar u ocultar la barra de menús");
     ImGui::BulletText("F3  efecto 3D (se puede cambiar en Opciones > Controles)");
