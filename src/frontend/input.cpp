@@ -201,6 +201,18 @@ std::vector<std::string> Input::padNames() const {
     return names;
 }
 
+void Input::rightStick(float* x, float* y) const {
+    *x = *y = 0;
+    for (auto* p : pads_) {
+        const int ax = SDL_GameControllerGetAxis(p, SDL_CONTROLLER_AXIS_RIGHTX);
+        const int ay = SDL_GameControllerGetAxis(p, SDL_CONTROLLER_AXIS_RIGHTY);
+        if (std::abs(ax) < config_.stickDeadzone && std::abs(ay) < config_.stickDeadzone) continue;
+        *x = static_cast<float>(ax) / 32767.0f;
+        *y = static_cast<float>(ay) / 32767.0f;
+        return;
+    }
+}
+
 Buttons Input::poll(bool useKeyboard) const {
     std::array<bool, InputConfig::kButtons> down{};
     const Uint8* kb = SDL_GetKeyboardState(nullptr);

@@ -29,4 +29,10 @@ void splitPlanes(const VideoFrame& frame, Planes& planes);
 constexpr int kMaxEdgeDistance = 4;
 void markEdgeDistance(std::vector<uint32_t>& plane);
 
+// Marks the visible background pixels (160x144, 0xFFFFFFFF or 0) that belong to solid
+// tiles: tile patterns of which at most a quarter of the pixels on screen are colour 0.
+// Ground, walls and platforms are usually solid; foliage, clouds and outlines are not.
+// The voxel view extrudes solid tiles far back, like 3DNES does with its profiles.
+void markSolidTiles(const VideoFrame& frame, std::vector<uint32_t>& solid);
+
 }  // namespace plumgg

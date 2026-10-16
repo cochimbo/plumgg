@@ -41,6 +41,8 @@ public:
     bool handleEvent(const SDL_Event& e);
     // True while the keyboard belongs to the UI rather than the game.
     bool keyboardBusy() const;
+    // True while the mouse is over a menu or window.
+    bool mouseBusy() const;
 
     // Builds this frame's interface. Call once per frame before drawing the game.
     UiActions frame(const UiState& state);

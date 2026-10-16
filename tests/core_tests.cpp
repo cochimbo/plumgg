@@ -129,6 +129,11 @@ void testPlanes() {
     check(planes[PlanePriority][9] == red && planes[PlaneBackground][9] == 0, "planes: priority tile on its own");
     check(planes[PlaneSky][20] == black && planes[PlaneBackground][20] == 0, "planes: colour 0 is sky");
     check(planes[PlaneSky][4] == black, "planes: sky filled in behind solid tiles");
+
+    std::vector<uint32_t> solid;
+    markSolidTiles(f, solid);
+    check(solid[4] && solid[9], "solid tiles: a tile with no colour 0 is solid");
+    check(!solid[20], "solid tiles: sky is not");
 }
 
 // Edge distance for the voxel view: 1 on the outline of a shape, growing inwards up
