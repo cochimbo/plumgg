@@ -1,2 +1,85 @@
 # plumgg
-game gear emulator with improvements
+
+Emulador de Sega Game Gear para Windows. El objetivo a largo plazo es mostrar los juegos
+en pseudo-3D; esta primera versión es la base: CPU, vídeo, cartuchos, ventana y controles.
+
+## Qué funciona
+
+- **CPU Z80** completa, con instrucciones y flags no documentados. Pasa ZEXDOC y ZEXALL.
+- **VDP** (modo 4 del Master System con la paleta de 12 bits de la Game Gear): fondo con
+  scroll y bloqueos de scroll, sprites 8x8 / 8x16 / zoom, prioridad, interrupciones de
+  cuadro y de línea, contadores V/H.
+- **Cartuchos** con el mapper estándar de Sega y RAM de cartucho (guarda partidas en un
+  `.sav` junto a la ROM).
+- **Ventana SDL2**: escala entera, redimensionable, arrastra una ROM encima para cargarla.
+- **Mandos y teclado** configurables (ver más abajo). Admite cualquier mando que SDL
+  reconozca (Xbox, PlayStation, Switch Pro y compatibles) y se pueden conectar en caliente.
+
+Aún no hay sonido (PSG SN76489) ni mappers de Codemasters.
+
+## Controles
+
+| Game Gear | Teclado | Mando |
+|-----------|---------|-------|
+| Cruceta   | Flechas | Cruceta o stick izquierdo |
+| Botón 1   | Z       | A / X |
+| Botón 2   | X       | B / Y |
+| Start     | Intro   | Start |
+
+Teclas del emulador: `F1` reinicia, `F2` cambia de vista (2D / capas), `P` pausa, `Esc` sale.
+
+La primera vez que se abre, plumgg crea `plumgg.ini` en la carpeta de ajustes del usuario
+(`%APPDATA%\plumgg\plumgg\` en Windows). Si pones un `plumgg.ini` junto al ejecutable, se
+usa ese (modo portátil). Cada botón admite varias teclas o botones separados por comas:
+
+```ini
+[teclado]
+boton1 = Z, Space
+[mando]
+boton1 = a
+boton2 = b
+stick_como_cruceta = si
+```
+
+## Compilar
+
+Hace falta CMake 3.16+ y un compilador C++17.
+
+**Windows (Visual Studio 2022):**
+
+```
+cmake -S . -B build -A x64
+cmake --build build --config Release
+build\Release\plumgg.exe ruta\al\juego.gg
+```
+
+Si SDL2 no está instalado, CMake lo descarga y lo compila automáticamente. Para usar un
+SDL2 ya descargado, pasa `-DSDL2_DIR=C:\ruta\SDL2-2.30.9\cmake`. `SDL2.dll` se copia junto
+al ejecutable.
+
+**Linux:** instala `libsdl2-dev` y usa los mismos comandos de CMake.
+
+## Tests
+
+```
+ctest --test-dir build              # mapper, VDP e interrupciones
+build/zex_runner zexdoc.com         # ejercitador completo de la Z80
+```
+
+## Estructura
+
+```
+src/core/      emulación pura, sin SDL: z80, vdp, cartridge, gamegear
+src/render/    renderers: convierten un VideoFrame en imagen
+src/frontend/  ventana, bucle principal y controles (SDL2)
+tests/         tests del núcleo y ejecutor de ZEXDOC/ZEXALL
+installer/     instalador de Windows (Inno Setup)
+```
+
+### Pensado para el pseudo-3D
+
+El VDP no dibuja en pantalla: rellena un `VideoFrame` (`src/core/video_frame.h`) con el
+color final de cada píxel y, además, de qué capa viene (fondo, fondo con prioridad, sprite o
+color de fondo), qué tile o sprite lo generó y el scroll de cada línea. Los renderers solo
+leen esa estructura, así que un renderer pseudo-3D podrá separar las capas en profundidad
+sin tocar la emulación. La vista "capas" (`F2`) muestra justo esa información.
