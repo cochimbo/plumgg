@@ -1,5 +1,0 @@
-cmake_minimum_required(VERSION 3.16)
-project(plumgg CXX)
-find_package(SDL2 REQUIRED CONFIG)
-add_executable(plumgg WIN32 main.cpp)
-target_link_libraries(plumgg PRIVATE SDL2::SDL2main SDL2::SDL2)
