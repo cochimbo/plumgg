@@ -10,7 +10,9 @@ en pseudo-3D; esta primera versión es la base: CPU, vídeo, cartuchos, ventana 
   scroll y bloqueos de scroll, sprites 8x8 / 8x16 / zoom, prioridad, interrupciones de
   cuadro y de línea, contadores V/H.
 - **Cartuchos** con el mapper estándar de Sega y RAM de cartucho (guarda partidas en un
-  `.sav` junto a la ROM).
+  `.sav` junto a la ROM). Las ROMs pueden estar sueltas (`.gg`, `.sms`, `.bin`) o dentro de
+  un `.zip`; del zip se carga la primera ROM que contenga, y la partida se guarda junto al
+  zip con su mismo nombre.
 - **Ventana SDL2** con barra de menús: abrir ROM (diálogo de Windows o arrastrando el
   archivo), lista de recientes, pausa y reinicio, ventana de **Controles** para asignar
   teclas y botones del mando, y ventana de **Vídeo** (vista, escala entera / ajustar /
