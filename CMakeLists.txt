@@ -35,19 +35,45 @@ if(NOT SDL2_FOUND AND PLUMGG_FETCH_SDL2)
   FetchContent_MakeAvailable(SDL2)
 endif()
 
+if(TARGET SDL2::SDL2)
+  set(PLUMGG_SDL2_TARGET SDL2::SDL2)
+else()
+  set(PLUMGG_SDL2_TARGET SDL2::SDL2-static)
+endif()
+
+# Dear ImGui for the menus and option windows, drawn through SDL_Renderer.
+include(FetchContent)
+FetchContent_Declare(imgui
+  GIT_REPOSITORY https://github.com/ocornut/imgui.git
+  GIT_TAG v1.91.9b
+  GIT_SHALLOW TRUE)
+FetchContent_MakeAvailable(imgui)
+add_library(plumgg_imgui STATIC
+  ${imgui_SOURCE_DIR}/imgui.cpp
+  ${imgui_SOURCE_DIR}/imgui_draw.cpp
+  ${imgui_SOURCE_DIR}/imgui_tables.cpp
+  ${imgui_SOURCE_DIR}/imgui_widgets.cpp
+  ${imgui_SOURCE_DIR}/backends/imgui_impl_sdl2.cpp
+  ${imgui_SOURCE_DIR}/backends/imgui_impl_sdlrenderer2.cpp
+)
+target_include_directories(plumgg_imgui PUBLIC ${imgui_SOURCE_DIR} ${imgui_SOURCE_DIR}/backends)
+target_link_libraries(plumgg_imgui PUBLIC ${PLUMGG_SDL2_TARGET})
+
 add_executable(plumgg WIN32
   src/frontend/main.cpp
   src/frontend/input.cpp
+  src/frontend/settings.cpp
+  src/frontend/file_dialog.cpp
+  src/frontend/ui.cpp
   src/render/sdl_renderers.cpp
 )
-target_link_libraries(plumgg PRIVATE plumgg_core)
+target_link_libraries(plumgg PRIVATE plumgg_core plumgg_imgui)
 if(TARGET SDL2::SDL2main)
   target_link_libraries(plumgg PRIVATE SDL2::SDL2main)
 endif()
-if(TARGET SDL2::SDL2)
-  target_link_libraries(plumgg PRIVATE SDL2::SDL2)
-else()
-  target_link_libraries(plumgg PRIVATE SDL2::SDL2-static)
+target_link_libraries(plumgg PRIVATE ${PLUMGG_SDL2_TARGET})
+if(WIN32)
+  target_link_libraries(plumgg PRIVATE comdlg32)
 endif()
 
 # Copy SDL2.dll next to plumgg.exe so it runs straight from the build folder.
