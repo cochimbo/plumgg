@@ -6,6 +6,11 @@ on:
     tags: ['v*']
   pull_request:
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Tag to create and publish as a release (e.g. v0.0.1-alpha). Leave empty to only build.'
+        required: false
+        default: ''
 
 permissions:
   contents: write
@@ -13,6 +18,8 @@ permissions:
 env:
   SDL2_VERSION: 2.30.9
   APP_EXE: plumgg.exe
+  # Set when a v* tag is pushed, or when the workflow is run by hand with a release_tag.
+  RELEASE_TAG: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || inputs.release_tag }}
 
 jobs:
   installer:
@@ -75,7 +82,10 @@ jobs:
         if: steps.src.outputs.present == 'true'
         shell: pwsh
         run: |
-          if ($env:GITHUB_REF -like 'refs/tags/v*') { $v = $env:GITHUB_REF_NAME.Substring(1) }
+          if ($env:RELEASE_TAG) {
+            if ($env:RELEASE_TAG -notmatch '^v\d') { Write-Host "::error::release_tag must look like v1.2.3"; exit 1 }
+            $v = $env:RELEASE_TAG.Substring(1)
+          }
           else { $v = "0.0.0-dev.$env:GITHUB_RUN_NUMBER" }
           "APP_VERSION=$v" >> $env:GITHUB_ENV
 
@@ -99,10 +109,13 @@ jobs:
           path: dist-installer/*.exe
 
       - name: Attach installer to release
-        if: steps.src.outputs.present == 'true' && startsWith(github.ref, 'refs/tags/v')
+        if: steps.src.outputs.present == 'true' && env.RELEASE_TAG != ''
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          # Only used when the tag does not exist yet (manual run): tag the built commit.
+          target_commitish: ${{ github.sha }}
           files: dist-installer/*.exe
           # Tags with a suffix (v0.0.1-alpha, v1.0.0-rc1) are published as prereleases.
-          prerelease: ${{ contains(github.ref_name, '-') }}
+          prerelease: ${{ contains(env.RELEASE_TAG, '-') }}
           generate_release_notes: true
