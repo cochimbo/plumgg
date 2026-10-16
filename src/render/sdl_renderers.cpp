@@ -21,9 +21,18 @@ void SdlTextureRenderer::draw(const VideoFrame& frame, int windowWidth, int wind
     compose(frame, pixels_.data());
     SDL_UpdateTexture(texture_, nullptr, pixels_.data(), kW * static_cast<int>(sizeof(uint32_t)));
 
-    // Largest integer scale that fits, centred, to keep pixels square and sharp.
-    int scale = std::max(1, std::min(windowWidth / kW, windowHeight / kH));
-    SDL_Rect dst{(windowWidth - kW * scale) / 2, (windowHeight - kH * scale) / 2, kW * scale, kH * scale};
+    SDL_SetTextureScaleMode(texture_, options_.smooth ? SDL_ScaleModeLinear : SDL_ScaleModeNearest);
+    int w = windowWidth, h = windowHeight;
+    if (options_.scale == ScaleMode::Integer) {
+        // Largest integer scale that fits, centred, to keep pixels square and sharp.
+        const int scale = std::max(1, std::min(windowWidth / kW, windowHeight / kH));
+        w = kW * scale;
+        h = kH * scale;
+    } else if (options_.scale == ScaleMode::Fit) {
+        if (windowWidth * kH > windowHeight * kW) w = windowHeight * kW / kH;
+        else h = windowWidth * kH / kW;
+    }
+    SDL_Rect dst{(windowWidth - w) / 2, (windowHeight - h) / 2, w, h};
     SDL_SetRenderDrawColor(sdl_, 0, 0, 0, 255);
     SDL_RenderClear(sdl_);
     SDL_RenderCopy(sdl_, texture_, nullptr, &dst);

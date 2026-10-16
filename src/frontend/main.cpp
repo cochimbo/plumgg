@@ -8,6 +8,8 @@
 #include "../core/gamegear.h"
 #include "../render/sdl_renderers.h"
 #include "input.h"
+#include "settings.h"
+#include "ui.h"
 
 using namespace plumgg;
 
@@ -68,6 +70,10 @@ std::string configPath() {
     return portable.empty() ? "plumgg.ini" : portable;
 }
 
+void applyWindowScale(SDL_Window* window, int scale, int menuHeight) {
+    SDL_SetWindowSize(window, VideoFrame::kVisibleWidth * scale, VideoFrame::kVisibleHeight * scale + menuHeight);
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -75,13 +81,18 @@ int main(int argc, char** argv) {
         std::fprintf(stderr, "SDL_Init: %s\n", SDL_GetError());
         return 1;
     }
-    SDL_Window* window = SDL_CreateWindow("plumgg - arrastra una ROM de Game Gear aquí", SDL_WINDOWPOS_CENTERED,
-                                          SDL_WINDOWPOS_CENTERED, VideoFrame::kVisibleWidth * 4,
-                                          VideoFrame::kVisibleHeight * 4, SDL_WINDOW_RESIZABLE);
+    const std::string iniPath = configPath();
+    auto input = std::make_unique<Input>(InputConfig::loadOrCreate(iniPath));
+    Settings settings = Settings::load(iniPath);
+
+    SDL_Window* window = SDL_CreateWindow("plumgg", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
+                                          VideoFrame::kVisibleWidth * settings.windowScale,
+                                          VideoFrame::kVisibleHeight * settings.windowScale, SDL_WINDOW_RESIZABLE);
     if (!window) {
         std::fprintf(stderr, "SDL_CreateWindow: %s\n", SDL_GetError());
         return 1;
     }
+    SDL_SetWindowMinimumSize(window, VideoFrame::kVisibleWidth, VideoFrame::kVisibleHeight);
     SDL_Renderer* sdl = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
     if (!sdl) sdl = SDL_CreateRenderer(window, -1, SDL_RENDERER_SOFTWARE);
     if (!sdl) {
@@ -92,13 +103,31 @@ int main(int argc, char** argv) {
     std::vector<std::unique_ptr<Renderer>> renderers;
     renderers.push_back(std::make_unique<FlatRenderer>(sdl));
     renderers.push_back(std::make_unique<LayerRenderer>(sdl));
-    size_t current = 0;
+    UiState uiState;
+    for (const auto& r : renderers) uiState.views.push_back(r->name());
+    auto viewIndex = [&] {
+        for (size_t i = 0; i < renderers.size(); ++i)
+            if (settings.view == renderers[i]->name()) return i;
+        return size_t{0};
+    };
 
-    auto input = std::make_unique<Input>(InputConfig::loadOrCreate(configPath()));
     input->openAll();
-
+    auto ui = std::make_unique<Ui>(window, sdl, settings, *input);
     auto app = std::make_unique<App>();
-    if (argc > 1) app->load(argv[1], window);
+
+    auto save = [&] { settings.save(iniPath, input->config()); };
+    auto load = [&](const std::string& path) {
+        if (app->load(path, window)) {
+            settings.addRecent(path);
+        } else {
+            settings.removeRecent(path);
+        }
+        save();
+    };
+    auto setFullscreen = [&] { SDL_SetWindowFullscreen(window, settings.fullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0); };
+    if (settings.fullscreen) setFullscreen();
+    if (argc > 1) load(argv[1]);
+    bool sizedForMenu = false;
 
     const double freq = static_cast<double>(SDL_GetPerformanceFrequency());
     Uint64 next = SDL_GetPerformanceCounter();
@@ -107,34 +136,83 @@ int main(int argc, char** argv) {
     while (running) {
         SDL_Event e;
         while (SDL_PollEvent(&e)) {
+            if (ui->handleEvent(e)) continue;
             input->handleEvent(e);
             switch (e.type) {
                 case SDL_QUIT: running = false; break;
                 case SDL_DROPFILE:
-                    app->load(e.drop.file, window);
+                    load(e.drop.file);
                     SDL_free(e.drop.file);
                     break;
-                case SDL_KEYDOWN:
-                    switch (e.key.keysym.scancode) {
-                        case SDL_SCANCODE_ESCAPE: running = false; break;
-                        case SDL_SCANCODE_F1: app->console.reset(); break;
-                        case SDL_SCANCODE_F2: current = (current + 1) % renderers.size(); break;
-                        case SDL_SCANCODE_P: paused = !paused; break;
-                        default: break;
-                    }
+                default: break;
+            }
+            if (ui->keyboardBusy() && e.type == SDL_KEYDOWN) continue;
+
+            if (input->hotkeyFor(e) == Hotkey::Toggle3D) {
+                settings.render.pseudo3d = !settings.render.pseudo3d;
+                ui->notify(settings.render.pseudo3d ? "Efecto 3D activado" : "Efecto 3D desactivado");
+                save();
+            }
+            if (e.type != SDL_KEYDOWN || e.key.repeat) continue;
+            const bool ctrl = (e.key.keysym.mod & KMOD_CTRL) != 0;
+            const bool alt = (e.key.keysym.mod & KMOD_ALT) != 0;
+            switch (e.key.keysym.scancode) {
+                case SDL_SCANCODE_ESCAPE:
+                    settings.showMenu = !settings.showMenu;
+                    save();
+                    break;
+                case SDL_SCANCODE_O:
+                    if (ctrl) ui->openRom();
+                    break;
+                case SDL_SCANCODE_F1: app->console.reset(); break;
+                case SDL_SCANCODE_F2:
+                    settings.view = renderers[(viewIndex() + 1) % renderers.size()]->name();
+                    ui->notify(std::string("Vista: ") + settings.view);
+                    save();
+                    break;
+                case SDL_SCANCODE_P: paused = !paused; break;
+                case SDL_SCANCODE_RETURN:
+                    if (!alt) break;
+                    [[fallthrough]];
+                case SDL_SCANCODE_F11:
+                    settings.fullscreen = !settings.fullscreen;
+                    setFullscreen();
+                    save();
                     break;
                 default: break;
             }
         }
 
+        uiState.romLoaded = app->romLoaded;
+        uiState.paused = paused;
+        const UiActions act = ui->frame(uiState);
+        if (!act.load.empty()) load(act.load);
+        if (act.reset) app->console.reset();
+        if (act.togglePause) paused = !paused;
+        if (act.quit) running = false;
+        if (act.fullscreenChanged) setFullscreen();
+        if (act.windowScale) applyWindowScale(window, act.windowScale, ui->menuHeight());
+        if (act.settingsChanged) save();
+        // The first frame tells us how tall the menu bar is; grow the window to fit it.
+        if (!sizedForMenu && !settings.fullscreen) {
+            applyWindowScale(window, settings.windowScale, ui->menuHeight());
+            sizedForMenu = true;
+        }
+
         if (app->romLoaded && !paused) {
-            app->console.setButtons(input->poll());
+            app->console.setButtons(input->poll(!ui->keyboardBusy()));
             app->console.runFrame();
         }
 
         int w, h;
         SDL_GetRendererOutputSize(sdl, &w, &h);
-        renderers[current]->draw(app->console.frame(), w, h);
+        const int top = ui->menuHeight();
+        SDL_Rect game{0, top, w, h - top};
+        SDL_RenderSetViewport(sdl, &game);
+        Renderer& view = *renderers[viewIndex()];
+        view.setOptions(settings.render);
+        view.draw(app->console.frame(), game.w, game.h);
+        ui->render();
         SDL_RenderPresent(sdl);
 
         // Pace to the console's refresh rate; resync if we fell far behind.
@@ -148,6 +226,8 @@ int main(int argc, char** argv) {
     }
 
     app->saveBattery();
+    save();
+    ui.reset();
     renderers.clear();
     input.reset();
     SDL_DestroyRenderer(sdl);
